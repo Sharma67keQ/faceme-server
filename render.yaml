@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: faceme-backend
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: CLIENT_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 30d
+      - key: JWT_ISSUER
+        value: faceme-api
+      - key: JWT_AUDIENCE
+        value: faceme-mobile
+      - key: LOG_LEVEL
+        value: info
+      - key: ALLOW_SEED_IN_PRODUCTION
+        value: "false"
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_FOLDER
+        value: faceme-production
+      - key: MEDIA_MAX_FILE_SIZE_BYTES
+        value: 10485760

@@ -1,0 +1,15 @@
+.git
+.gitignore
+.npm-cache
+mobile
+scripts
+docker-compose.yml
+README.md
+ARCHITECTURE.md
+server/.env
+server/.env.production
+server/node_modules
+server/dist
+server/.npm-cache
+server/tests
+mobile/node_modules

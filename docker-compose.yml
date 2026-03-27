@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: faceme-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: faceme
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - faceme-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d faceme"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  faceme-postgres-data:
+

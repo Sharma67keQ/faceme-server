@@ -1,0 +1,26 @@
+{
+  "name": "faceme",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build:server": "npm --prefix server run build",
+    "start:server": "npm --prefix server run start:prod",
+    "start:prod": "npm run build:server && npm run start:server",
+    "dev:server": "npm --prefix server run dev",
+    "dev:mobile": "npm --prefix mobile run start",
+    "lint:server": "npm --prefix server run lint",
+    "lint:mobile": "npm --prefix mobile run lint",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres",
+    "db:prepare": "npm run db:generate && npm run db:migrate",
+    "db:setup": "node scripts/db-setup.mjs",
+    "db:migrate": "npm --prefix server run prisma:migrate",
+    "db:generate": "npm --prefix server run prisma:generate",
+    "db:seed": "npm --prefix server run prisma:seed"
+  },
+  "dependencies": {
+    "expo-video": "^55.0.11"
+  }
+}
