@@ -16,9 +16,6 @@
     "lint": "tsc --noEmit",
     "test:integration": "node --import tsx --test tests/**/*.test.ts"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "dependencies": {
     "@prisma/client": "^6.5.0",
     "bcryptjs": "^2.4.3",
