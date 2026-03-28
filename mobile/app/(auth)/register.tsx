@@ -6,12 +6,13 @@ import { BrandLockup } from "@/components/brand/brand-lockup";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Screen } from "@/components/ui/screen";
+import { GuestGuard } from "@/hooks/use-auth-guard";
 import { useAuthStore } from "@/store/auth-store";
 import { colors, spacing } from "@/utils/theme";
 
 const getApiErrorMessage = (error: AxiosError) => {
   if (!error.response) {
-    return "Cannot reach the Faceme server. Make sure the backend is running on your computer and your phone is on the same Wi-Fi.";
+    return "Cannot reach the Faceme server right now. Check your internet connection and try again in a moment.";
   }
 
   const payload = error.response.data;
@@ -77,27 +78,29 @@ export default function RegisterScreen() {
   };
 
   return (
-    <Screen scroll>
-      <View style={styles.header}>
-        <BrandLockup />
-        <Text style={styles.title}>Create your Faceme identity</Text>
-        <Text style={styles.subtitle}>
-          Join with one identity that moves naturally across chat, reels, status, pages, and community spaces.
-        </Text>
-      </View>
-      <Input label="First name" value={firstName} onChangeText={setFirstName} />
-      <Input label="Username" value={username} onChangeText={setUsername} placeholder="facemehandle" />
-      <Input label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" />
-      <Input
-        label="Password"
-        value={password}
-        onChangeText={setPassword}
-        placeholder="Create password"
-        secureTextEntry
-      />
-      <Button label={isSubmitting ? "Creating account..." : "Create account"} onPress={handleSubmit} />
-      {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
-    </Screen>
+    <GuestGuard>
+      <Screen scroll>
+        <View style={styles.header}>
+          <BrandLockup />
+          <Text style={styles.title}>Create your Faceme identity</Text>
+          <Text style={styles.subtitle}>
+            Join with one identity that moves naturally across chat, reels, status, pages, and community spaces.
+          </Text>
+        </View>
+        <Input label="First name" value={firstName} onChangeText={setFirstName} />
+        <Input label="Username" value={username} onChangeText={setUsername} placeholder="facemehandle" />
+        <Input label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" />
+        <Input
+          label="Password"
+          value={password}
+          onChangeText={setPassword}
+          placeholder="Create password"
+          secureTextEntry
+        />
+        <Button label={isSubmitting ? "Creating account..." : "Create account"} onPress={handleSubmit} />
+        {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+      </Screen>
+    </GuestGuard>
   );
 }
 

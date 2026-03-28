@@ -2,10 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { MediaAttachmentPreview } from "@/components/media-attachment-preview";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Screen } from "@/components/ui/screen";
+import { mediaService } from "@/services/media";
 import { statusService } from "@/services/status";
 import { useAuthStore } from "@/store/auth-store";
 import { colors, radius, spacing } from "@/utils/theme";
@@ -14,10 +16,11 @@ export default function StatusScreen() {
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((state) => state.user?.id);
   const [text, setText] = useState("");
-  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaAttachment, setMediaAttachment] = useState<{ localUri: string; remoteUrl: string } | null>(null);
   const [kind, setKind] = useState<"TEXT" | "IMAGE" | "VIDEO">("TEXT");
   const [visibility, setVisibility] = useState<"PUBLIC" | "FOLLOWERS" | "FRIENDS">("PUBLIC");
   const [replyText, setReplyText] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
 
   const { data: statuses = [] } = useQuery({
     queryKey: ["status"],
@@ -29,12 +32,12 @@ export default function StatusScreen() {
       statusService.create({
         kind,
         text: kind === "TEXT" ? text.trim() : undefined,
-        mediaUrl: kind !== "TEXT" ? mediaUrl.trim() : undefined,
+        mediaUrl: kind !== "TEXT" ? mediaAttachment?.remoteUrl : undefined,
         visibility,
       }),
     onSuccess: async () => {
       setText("");
-      setMediaUrl("");
+      setMediaAttachment(null);
       await queryClient.invalidateQueries({ queryKey: ["status"] });
     },
   });
@@ -54,6 +57,23 @@ export default function StatusScreen() {
       await queryClient.invalidateQueries({ queryKey: ["status"] });
     },
   });
+
+  const handlePickMedia = async (nextKind: "IMAGE" | "VIDEO") => {
+    try {
+      setIsUploading(true);
+      const asset = await mediaService.pickFromLibrary(nextKind === "VIDEO" ? "video" : "image");
+
+      if (!asset) {
+        return;
+      }
+
+      const uploaded = await mediaService.uploadAsset(asset, nextKind === "VIDEO" ? "video" : "image");
+      setMediaAttachment({ localUri: asset.uri, remoteUrl: uploaded.secureUrl });
+      setKind(nextKind);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   return (
     <Screen scroll>
@@ -84,7 +104,18 @@ export default function StatusScreen() {
         {kind === "TEXT" ? (
           <Input label="Text status" value={text} onChangeText={setText} multiline />
         ) : (
-          <Input label={`${kind} URL`} value={mediaUrl} onChangeText={setMediaUrl} placeholder="https://..." />
+          <>
+            <View style={styles.row}>
+              <Pressable style={styles.pickerButton} onPress={() => void handlePickMedia(kind)}>
+                <Text style={styles.pickerButtonLabel}>
+                  {isUploading ? `Uploading ${kind.toLowerCase()}...` : kind === "VIDEO" ? "Pick video" : "Pick image"}
+                </Text>
+              </Pressable>
+            </View>
+            {mediaAttachment ? (
+              <MediaAttachmentPreview uri={mediaAttachment.localUri} kind={kind} label="Status ready" />
+            ) : null}
+          </>
         )}
         <Input
           label="Optional reaction reply"
@@ -95,7 +126,7 @@ export default function StatusScreen() {
         <Button
           label={createMutation.isPending ? "Publishing..." : "Publish status"}
           onPress={() => createMutation.mutate()}
-          disabled={createMutation.isPending}
+          disabled={createMutation.isPending || isUploading || (kind !== "TEXT" && !mediaAttachment?.remoteUrl)}
         />
       </View>
 
@@ -214,6 +245,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: spacing.sm,
     paddingVertical: 6,
+  },
+  pickerButton: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  pickerButtonLabel: {
+    color: colors.primaryDark,
+    fontWeight: "700",
   },
   section: {
     gap: spacing.xs,

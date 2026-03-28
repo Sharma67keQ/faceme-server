@@ -111,6 +111,7 @@ export type Post = {
   id: string;
   body: string;
   mediaUrl?: string | null;
+  mediaType?: "IMAGE" | "VIDEO" | "AUDIO" | "FILE" | null;
   visibility?: "PUBLIC" | "FOLLOWERS" | "FRIENDS";
   kind?: "STANDARD" | "QUICK" | "SHARE";
   shareSlug?: string | null;
@@ -287,13 +288,27 @@ export type VoiceRoom = {
   id: string;
   title: string;
   topic?: string | null;
+  description?: string | null;
+  theme: "SUNSET" | "AURORA" | "LOUNGE" | "PARTY";
+  privacy: "PUBLIC" | "FOLLOWERS" | "FRIENDS" | "INVITE_ONLY";
+  status: "LIVE" | "ENDED";
   isLive: boolean;
+  endedAt?: string | null;
   createdAt: string;
   participantsCount?: number;
   host: User;
+  owner?: User;
+  viewerRole?: "OWNER" | "ADMIN" | "MEMBER" | null;
+  canJoin?: boolean;
+  canEdit?: boolean;
+  canModerate?: boolean;
   participants: Array<{
     id: string;
+    role: "OWNER" | "ADMIN" | "MEMBER";
     state: "LISTENING" | "SPEAKING" | "MUTED";
+    canBeRemoved?: boolean;
+    canPromote?: boolean;
+    canDemote?: boolean;
     user: User;
   }>;
 };
@@ -304,6 +319,7 @@ export type Message = {
   senderId: string;
   text?: string | null;
   mediaUrl?: string | null;
+  mediaType?: "IMAGE" | "VIDEO" | "AUDIO" | "FILE" | null;
   type: "TEXT" | "IMAGE" | "VIDEO" | "AUDIO" | "SYSTEM";
   createdAt: string;
   statuses?: Array<{

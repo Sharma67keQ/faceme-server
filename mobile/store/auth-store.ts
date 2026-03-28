@@ -39,12 +39,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   async signIn(payload) {
     const result = await authService.login(payload);
     await tokenStorage.setTokens(result.accessToken, result.refreshToken);
-    set({ user: result.user, accessToken: result.accessToken });
+    set({ user: result.user, accessToken: result.accessToken, isHydrated: true });
   },
   async signUp(payload) {
     const result = await authService.register(payload);
     await tokenStorage.setTokens(result.accessToken, result.refreshToken);
-    set({ user: result.user, accessToken: result.accessToken });
+    set({ user: result.user, accessToken: result.accessToken, isHydrated: true });
   },
   async hydrate() {
     const accessToken = await tokenStorage.getAccessToken();

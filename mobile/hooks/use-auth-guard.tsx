@@ -19,3 +19,17 @@ export const AuthGuard = ({ children }: PropsWithChildren) => {
 
   return children;
 };
+
+export const GuestGuard = ({ children }: PropsWithChildren) => {
+  const { accessToken, isHydrated, user } = useAuthStore();
+
+  if (!isHydrated) {
+    return null;
+  }
+
+  if (accessToken) {
+    return <Redirect href={(user?.isOnboardingComplete ? "/(tabs)" : "/(onboarding)/setup") as never} />;
+  }
+
+  return children;
+};

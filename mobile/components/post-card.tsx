@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { MediaAttachmentPreview } from "@/components/media-attachment-preview";
 import { Comment, Post } from "@/types/domain";
 import { postService } from "@/services/posts";
 import { useAuthStore } from "@/store/auth-store";
@@ -224,7 +225,6 @@ export const PostCard = ({
   const [activeReplyCommentId, setActiveReplyCommentId] = useState<string | null>(null);
   const [isEditingPost, setIsEditingPost] = useState(false);
   const [editingBody, setEditingBody] = useState(post.body);
-  const [editingMediaUrl, setEditingMediaUrl] = useState(post.mediaUrl ?? "");
 
   const invalidatePostQueries = async () => {
     await Promise.all([
@@ -313,12 +313,8 @@ export const PostCard = ({
     mutationFn: () =>
       postService.updatePost(post.id, {
         body: editingBody.trim(),
-        mediaUrl: editingMediaUrl.trim() || null,
-        mediaType: editingMediaUrl.trim()
-          ? editingMediaUrl.toLowerCase().includes(".mp4")
-            ? "VIDEO"
-            : "IMAGE"
-          : null,
+        mediaUrl: post.mediaUrl ?? null,
+        mediaType: post.mediaType === "VIDEO" ? "VIDEO" : post.mediaType === "IMAGE" ? "IMAGE" : null,
         visibility: post.visibility,
       }),
     onSuccess: async () => {
@@ -417,13 +413,6 @@ export const PostCard = ({
             placeholderTextColor={colors.textMuted}
             style={styles.editorInput}
           />
-          <TextInput
-            value={editingMediaUrl}
-            onChangeText={setEditingMediaUrl}
-            placeholder="Media URL"
-            placeholderTextColor={colors.textMuted}
-            style={styles.editorInput}
-          />
           <Pressable
             style={styles.saveEditButton}
             onPress={() => updatePostMutation.mutate()}
@@ -435,6 +424,14 @@ export const PostCard = ({
       ) : (
         <Text style={styles.body}>{post.body}</Text>
       )}
+      {post.mediaUrl && (post.mediaType === "IMAGE" || post.mediaType === "VIDEO") ? (
+        <MediaAttachmentPreview
+          autoPlay={post.mediaType === "VIDEO"}
+          height={280}
+          kind={post.mediaType}
+          uri={post.mediaUrl}
+        />
+      ) : null}
       {post.page ? (
         <Pressable onPress={() => router.push(`/page/${post.page?.slug}` as never)}>
           <Text style={styles.contextLink}>From page: {post.page.name}</Text>

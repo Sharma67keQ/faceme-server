@@ -46,3 +46,14 @@ export type VoiceRoomResponse = VoiceRoom[];
 export type ModerationReportResponse = ModerationReport[];
 export type ModerationLogResponse = ModerationLog[];
 export type ModerationOverviewResponse = ModerationOverview;
+
+export type MediaUploadResponse = {
+  publicId: string;
+  secureUrl: string;
+  width?: number | null;
+  height?: number | null;
+  bytes: number;
+  format?: string | null;
+  resourceType: string;
+  originalFilename: string;
+};

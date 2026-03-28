@@ -35,12 +35,21 @@ const resolveOrigin = (value: string, fallbackOrigin: string) => {
   }
 };
 
-const defaultApiBase = "http://localhost:4000/api";
-const defaultSocketBase = "http://localhost:4000";
+const productionApiBase = "https://faceme-server.onrender.com/api";
+const productionSocketBase = "https://faceme-server.onrender.com";
+const productionLiveKitBase = "";
+const developmentApiBase = "http://localhost:4000/api";
+const developmentSocketBase = "http://localhost:4000";
+const developmentLiveKitBase = "";
 const appEnv = process.env.EXPO_PUBLIC_APP_ENV ?? "development";
+
+const defaultApiBase = appEnv === "production" ? productionApiBase : developmentApiBase;
+const defaultSocketBase = appEnv === "production" ? productionSocketBase : developmentSocketBase;
+const defaultLiveKitBase = appEnv === "production" ? productionLiveKitBase : developmentLiveKitBase;
 
 const apiSource = process.env.EXPO_PUBLIC_API_URL ?? defaultApiBase;
 const socketSource = process.env.EXPO_PUBLIC_SOCKET_URL ?? defaultSocketBase;
+const liveKitSource = process.env.EXPO_PUBLIC_LIVEKIT_URL ?? defaultLiveKitBase;
 
 const requireConfiguredUrl = (value: string, fallback: string, label: string) => {
   if (appEnv !== "production") {
@@ -70,4 +79,5 @@ export const runtimeConfig = {
     requireConfiguredUrl(socketSource, defaultSocketBase, "EXPO_PUBLIC_SOCKET_URL"),
     defaultSocketBase,
   ),
+  liveKitUrl: liveKitSource || null,
 };

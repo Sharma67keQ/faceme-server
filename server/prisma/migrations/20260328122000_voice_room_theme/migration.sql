@@ -1,0 +1,4 @@
+CREATE TYPE "VoiceRoomTheme" AS ENUM ('SUNSET', 'AURORA', 'LOUNGE', 'PARTY');
+
+ALTER TABLE "VoiceRoom"
+ADD COLUMN "theme" "VoiceRoomTheme" NOT NULL DEFAULT 'SUNSET';

@@ -2,9 +2,11 @@ import { Stack } from "expo-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
+import { registerGlobals } from "@livekit/react-native";
 import { useAuthStore } from "@/store/auth-store";
 
 const queryClient = new QueryClient();
+registerGlobals();
 
 export default function RootLayout() {
   const hydrate = useAuthStore((state) => state.hydrate);

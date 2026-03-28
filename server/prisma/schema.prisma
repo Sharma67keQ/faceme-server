@@ -92,6 +92,25 @@ enum VoiceParticipantState {
   MUTED
 }
 
+enum VoiceRoomPrivacy {
+  PUBLIC
+  FOLLOWERS
+  FRIENDS
+  INVITE_ONLY
+}
+
+enum VoiceRoomStatus {
+  LIVE
+  ENDED
+}
+
+enum VoiceRoomTheme {
+  SUNSET
+  AURORA
+  LOUNGE
+  PARTY
+}
+
 enum ParticipantRole {
   MEMBER
   ADMIN
@@ -583,6 +602,11 @@ model VoiceRoom {
   hostId       String
   title        String
   topic        String?
+  description  String?            @db.VarChar(500)
+  theme        VoiceRoomTheme     @default(SUNSET)
+  privacy      VoiceRoomPrivacy   @default(PUBLIC)
+  status       VoiceRoomStatus    @default(LIVE)
+  endedAt      DateTime?
   isLive       Boolean            @default(true)
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
@@ -596,6 +620,7 @@ model VoiceParticipant {
   id          String                 @id @default(cuid())
   roomId       String
   userId       String
+  role         ParticipantRole       @default(MEMBER)
   state        VoiceParticipantState @default(LISTENING)
   joinedAt     DateTime               @default(now())
   room         VoiceRoom              @relation(fields: [roomId], references: [id], onDelete: Cascade)

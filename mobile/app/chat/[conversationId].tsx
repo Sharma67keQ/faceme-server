@@ -1,9 +1,12 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Ionicons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { MediaAttachmentPreview } from "@/components/media-attachment-preview";
 import { Screen } from "@/components/ui/screen";
 import { chatService } from "@/services/chat";
+import { mediaService } from "@/services/media";
 import { useAuthStore } from "@/store/auth-store";
 import { useChatStore } from "@/store/chat-store";
 import { colors, radius, spacing } from "@/utils/theme";
@@ -16,10 +19,11 @@ export default function ConversationScreen() {
   const appendMessage = useChatStore((state) => state.appendMessage);
   const setActiveConversation = useChatStore((state) => state.setActiveConversation);
   const [text, setText] = useState("");
-  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaAttachment, setMediaAttachment] = useState<{ localUri: string; remoteUrl: string } | null>(null);
   const [messageType, setMessageType] = useState<"TEXT" | "IMAGE" | "VIDEO" | "AUDIO">("TEXT");
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const [messageStatuses, setMessageStatuses] = useState<Record<string, "SENT" | "DELIVERED" | "SEEN">>({});
+  const [isUploading, setIsUploading] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -47,16 +51,24 @@ export default function ConversationScreen() {
     }
 
     const socket = chatService.connect(accessToken);
-    socket.emit("conversation:join", conversationId);
-    socket.on("message:new", (message) => appendMessage(conversationId, message));
-    socket.on("typing:update", (payload) => {
+    const handleNewMessage = (message: any) => {
+      if (message.conversationId === conversationId) {
+        appendMessage(conversationId, message);
+      }
+    };
+    const handleTypingUpdate = (payload: { conversationId: string; userId: string; isTyping: boolean }) => {
       if (payload.conversationId !== conversationId || payload.userId === currentUserId) {
         return;
       }
 
       setTypingUserId(payload.isTyping ? payload.userId : null);
-    });
-    socket.on("message:status", (payload) => {
+    };
+    const handleMessageStatus = (payload: {
+      conversationId: string;
+      messageId: string;
+      userId: string;
+      status: "SENT" | "DELIVERED" | "SEEN";
+    }) => {
       if (payload.conversationId !== conversationId || payload.userId === currentUserId) {
         return;
       }
@@ -65,12 +77,18 @@ export default function ConversationScreen() {
         ...currentStatuses,
         [payload.messageId]: payload.status,
       }));
-    });
+    };
+
+    socket.emit("conversation:join", conversationId);
+    socket.on("message:new", handleNewMessage);
+    socket.on("typing:update", handleTypingUpdate);
+    socket.on("message:status", handleMessageStatus);
 
     return () => {
-      socket.off("message:new");
-      socket.off("typing:update");
-      socket.off("message:status");
+      socket.off("message:new", handleNewMessage);
+      socket.off("typing:update", handleTypingUpdate);
+      socket.off("message:status", handleMessageStatus);
+      socket.emit("typing:stop", { conversationId });
     };
   }, [accessToken, appendMessage, conversationId, currentUserId]);
 
@@ -134,9 +152,8 @@ export default function ConversationScreen() {
 
   const handleSend = async () => {
     const trimmedText = text.trim();
-    const trimmedMediaUrl = mediaUrl.trim();
 
-    if (!trimmedText && !trimmedMediaUrl) {
+    if (!trimmedText && !mediaAttachment?.remoteUrl) {
       return;
     }
 
@@ -150,20 +167,37 @@ export default function ConversationScreen() {
       socket.emit("message:send", {
         conversationId,
         text: trimmedText || undefined,
-        mediaUrl: trimmedMediaUrl || undefined,
-        type: trimmedMediaUrl ? messageType : "TEXT",
+        mediaUrl: mediaAttachment?.remoteUrl,
+        type: mediaAttachment?.remoteUrl ? messageType : "TEXT",
       });
     } else {
       await chatService.sendMessage(conversationId, {
         text: trimmedText || undefined,
-        mediaUrl: trimmedMediaUrl || undefined,
-        type: trimmedMediaUrl ? messageType : "TEXT",
+        mediaUrl: mediaAttachment?.remoteUrl,
+        type: mediaAttachment?.remoteUrl ? messageType : "TEXT",
       });
     }
 
     setText("");
-    setMediaUrl("");
+    setMediaAttachment(null);
     setMessageType("TEXT");
+  };
+
+  const handlePickAttachment = async (type: "IMAGE" | "VIDEO") => {
+    try {
+      setIsUploading(true);
+      const asset = await mediaService.pickFromLibrary(type === "VIDEO" ? "video" : "image");
+
+      if (!asset) {
+        return;
+      }
+
+      const uploaded = await mediaService.uploadAsset(asset, type === "VIDEO" ? "video" : "image");
+      setMediaAttachment({ localUri: asset.uri, remoteUrl: uploaded.secureUrl });
+      setMessageType(type);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -200,7 +234,14 @@ export default function ConversationScreen() {
                     ? "Video message"
                     : "Image message")}
             </Text>
-            {message.mediaUrl ? <Text style={styles.mediaUrl}>{message.mediaUrl}</Text> : null}
+            {message.mediaUrl && (message.type === "IMAGE" || message.type === "VIDEO") ? (
+              <MediaAttachmentPreview
+                autoPlay={message.type === "VIDEO"}
+                height={220}
+                kind={message.type}
+                uri={message.mediaUrl}
+              />
+            ) : null}
             {message.senderId === currentUserId ? (
               <Text
                 style={[
@@ -237,17 +278,26 @@ export default function ConversationScreen() {
             placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
-          {messageType !== "TEXT" ? (
-            <TextInput
-              value={mediaUrl}
-              onChangeText={setMediaUrl}
-              placeholder={`${messageType.toLowerCase()} URL`}
-              placeholderTextColor={colors.textMuted}
-              style={styles.input}
+          <View style={styles.attachmentRow}>
+            <Pressable style={styles.attachChip} onPress={() => void handlePickAttachment("IMAGE")}>
+              <Ionicons name="image-outline" color={colors.primaryDark} size={16} />
+              <Text style={styles.attachChipLabel}>{isUploading && messageType === "IMAGE" ? "Uploading..." : "Photo"}</Text>
+            </Pressable>
+            <Pressable style={styles.attachChip} onPress={() => void handlePickAttachment("VIDEO")}>
+              <Ionicons name="videocam-outline" color={colors.primaryDark} size={16} />
+              <Text style={styles.attachChipLabel}>{isUploading && messageType === "VIDEO" ? "Uploading..." : "Video"}</Text>
+            </Pressable>
+          </View>
+          {mediaAttachment ? (
+            <MediaAttachmentPreview
+              uri={mediaAttachment.localUri}
+              kind={messageType === "VIDEO" ? "VIDEO" : "IMAGE"}
+              height={180}
+              label="Attachment ready"
             />
           ) : null}
         </View>
-        <Pressable style={styles.send} onPress={handleSend}>
+        <Pressable style={styles.send} onPress={handleSend} disabled={isUploading}>
           <Text style={styles.sendLabel}>Send</Text>
         </Pressable>
       </View>
@@ -310,6 +360,11 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.xs,
   },
+  attachmentRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+  },
   typeChip: {
     backgroundColor: colors.surfaceRaised,
     borderColor: colors.border,
@@ -329,6 +384,22 @@ const styles = StyleSheet.create({
   },
   typeChipLabelActive: {
     color: colors.surface,
+  },
+  attachChip: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.xxs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+  },
+  attachChipLabel: {
+    color: colors.primaryDark,
+    fontSize: 12,
+    fontWeight: "700",
   },
   send: {
     minHeight: 52,

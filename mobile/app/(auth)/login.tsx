@@ -6,12 +6,13 @@ import { BrandLockup } from "@/components/brand/brand-lockup";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Screen } from "@/components/ui/screen";
+import { GuestGuard } from "@/hooks/use-auth-guard";
 import { useAuthStore } from "@/store/auth-store";
 import { colors, spacing } from "@/utils/theme";
 
 const getApiErrorMessage = (error: AxiosError) => {
   if (!error.response) {
-    return "Cannot reach the Faceme server. Make sure the backend is running on your computer and your phone is on the same Wi-Fi.";
+    return "Cannot reach the Faceme server right now. Check your internet connection and try again in a moment.";
   }
 
   const payload = error.response.data;
@@ -70,28 +71,30 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen scroll>
-      <View style={styles.header}>
-        <BrandLockup />
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>
-          Log in to your people, conversations, reels, and shared spaces.
-        </Text>
-      </View>
-      <Input label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" />
-      <Input
-        label="Password"
-        value={password}
-        onChangeText={setPassword}
-        placeholder="Enter password"
-        secureTextEntry
-      />
-      <Button label={isSubmitting ? "Logging in..." : "Log in"} onPress={handleSubmit} />
-      {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
-      <Link href="/(auth)/register">
-        <Text style={styles.link}>Create a new account</Text>
-      </Link>
-    </Screen>
+    <GuestGuard>
+      <Screen scroll>
+        <View style={styles.header}>
+          <BrandLockup />
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>
+            Log in to your people, conversations, reels, and shared spaces.
+          </Text>
+        </View>
+        <Input label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" />
+        <Input
+          label="Password"
+          value={password}
+          onChangeText={setPassword}
+          placeholder="Enter password"
+          secureTextEntry
+        />
+        <Button label={isSubmitting ? "Logging in..." : "Log in"} onPress={handleSubmit} />
+        {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+        <Link href="/(auth)/register">
+          <Text style={styles.link}>Create a new account</Text>
+        </Link>
+      </Screen>
+    </GuestGuard>
   );
 }
 
