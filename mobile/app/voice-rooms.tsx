@@ -117,13 +117,6 @@ export default function VoiceRoomsScreen() {
               <Text style={styles.roomBodyLight} numberOfLines={2}>
                 {room.description ?? room.topic ?? "Open conversation room"}
               </Text>
-              <View style={styles.partyRow}>
-                {["Song queue", "Emoji storm", "Quick poll"].map((label) => (
-                  <View key={`${room.id}-${label}`} style={styles.partyChip}>
-                    <Text style={styles.partyChipLabel}>{label}</Text>
-                  </View>
-                ))}
-              </View>
             </LinearGradient>
             <View style={styles.hostRow}>
               <Avatar name={room.owner?.firstName ?? room.host.firstName ?? room.host.username} size={34} />
@@ -229,16 +222,6 @@ const styles = StyleSheet.create({
   endedBadgeLabel: { color: colors.textMuted },
   roomBody: { color: colors.textMuted, lineHeight: 20 },
   roomBodyLight: { color: "#FFF8F1", lineHeight: 20 },
-  partyRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
-  partyChip: {
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderColor: "rgba(255,255,255,0.28)",
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-  },
-  partyChipLabel: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
   hostRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   hostCopy: { gap: 2 },
   hostName: { color: colors.text, fontWeight: "800" },

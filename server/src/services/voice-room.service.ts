@@ -1,6 +1,8 @@
 import { StatusCodes } from "http-status-codes";
 import { AccessToken } from "livekit-server-sdk";
+import type { ParticipantInfo, TrackInfo, TrackSource } from "@livekit/protocol";
 import { env } from "../lib/env.js";
+import { isLiveKitConfigured, liveKitRoomClient } from "../lib/livekit.js";
 import { prisma } from "../lib/prisma.js";
 import { ApiError } from "../utils/api-error.js";
 
@@ -25,21 +27,157 @@ const roomInclude = {
   },
 } as const;
 
+type RoomPrivacy = "PUBLIC" | "FOLLOWERS" | "FRIENDS" | "INVITE_ONLY";
+type RoomTheme = "SUNSET" | "AURORA" | "LOUNGE" | "PARTY";
+type ParticipantRole = "OWNER" | "ADMIN" | "MEMBER";
+type ParticipantState = "LISTENING" | "SPEAKING" | "MUTED";
+type RoomRecord = Awaited<ReturnType<typeof prisma.voiceRoom.findUniqueOrThrow>>;
+
+const getRoomName = (roomId: string) => roomId;
+
+const getLiveKitClient = () => {
+  if (!liveKitRoomClient) {
+    throw new ApiError(StatusCodes.SERVICE_UNAVAILABLE, "Live voice transport is not configured");
+  }
+
+  return liveKitRoomClient;
+};
+
+const getMicrophoneTrack = (participant?: ParticipantInfo | null) =>
+  participant?.tracks.find((track: TrackInfo) => track.source === 2 as TrackSource) ?? null;
+
+const buildRoomMetadata = (room: any) =>
+  JSON.stringify({
+    roomId: room.id,
+    title: room.title,
+    description: room.description ?? room.topic ?? null,
+    privacy: room.privacy,
+    theme: room.theme,
+    ownerId: room.hostId,
+    status: room.status,
+  });
+
+const syncLiveKitRoom = async (room: any) => {
+  if (!isLiveKitConfigured()) {
+    return;
+  }
+
+  const client = getLiveKitClient();
+
+  try {
+    await client.createRoom({
+      name: getRoomName(room.id),
+      departureTimeout: 120,
+      emptyTimeout: 10,
+      maxParticipants: 100,
+      metadata: buildRoomMetadata(room),
+    });
+  } catch {
+    await client.updateRoomMetadata(getRoomName(room.id), buildRoomMetadata(room));
+  }
+};
+
+const deleteLiveKitRoom = async (roomId: string) => {
+  if (!isLiveKitConfigured()) {
+    return;
+  }
+
+  try {
+    await getLiveKitClient().deleteRoom(getRoomName(roomId));
+  } catch {
+    // The room may already be gone in LiveKit. That should not block ending it in Faceme.
+  }
+};
+
+const listLiveParticipants = async (roomId: string) => {
+  if (!isLiveKitConfigured()) {
+    return new Map<string, ParticipantInfo>();
+  }
+
+  try {
+    const participants = await getLiveKitClient().listParticipants(getRoomName(roomId));
+    return new Map(participants.map((participant) => [participant.identity, participant]));
+  } catch {
+    return new Map<string, ParticipantInfo>();
+  }
+};
+
+const syncLiveParticipantPermissions = async (
+  roomId: string,
+  participant: {
+    userId: string;
+    role: ParticipantRole;
+    isMutedByModerator: boolean;
+    user: {
+      firstName?: string | null;
+      username: string;
+    };
+  },
+) => {
+  if (!isLiveKitConfigured()) {
+    return;
+  }
+
+  try {
+    await getLiveKitClient().updateParticipant(getRoomName(roomId), participant.userId, {
+      name: participant.user.firstName ?? participant.user.username,
+      metadata: JSON.stringify({
+        roomId,
+        role: participant.role,
+        isMutedByModerator: participant.isMutedByModerator,
+      }),
+      attributes: {
+        facemeRoomId: roomId,
+        facemeRole: participant.role,
+        facemeMutedByModerator: String(participant.isMutedByModerator),
+      },
+      permission: {
+        canSubscribe: true,
+        canPublish: !participant.isMutedByModerator,
+        canPublishData: true,
+        hidden: false,
+      },
+    });
+  } catch {
+    // If the participant is not currently connected to LiveKit, there is nothing to update yet.
+  }
+};
+
+const removeLiveParticipant = async (roomId: string, userId: string) => {
+  if (!isLiveKitConfigured()) {
+    return;
+  }
+
+  try {
+    await getLiveKitClient().removeParticipant(getRoomName(roomId), userId);
+  } catch {
+    // Removing a participant that is already disconnected should be treated as a no-op.
+  }
+};
+
 const canAccessRoom = async (
   viewerId: string,
-  ownerId: string,
-  privacy: "PUBLIC" | "FOLLOWERS" | "FRIENDS" | "INVITE_ONLY",
+  room: {
+    id: string;
+    hostId: string;
+    privacy: RoomPrivacy;
+    participants?: Array<{ userId: string }>;
+  },
 ) => {
-  if (viewerId === ownerId || privacy === "PUBLIC") {
+  if (viewerId === room.hostId || room.privacy === "PUBLIC") {
     return true;
   }
 
-  if (privacy === "FOLLOWERS") {
+  if (room.participants?.some((participant) => participant.userId === viewerId)) {
+    return true;
+  }
+
+  if (room.privacy === "FOLLOWERS") {
     const follow = await prisma.follow.findUnique({
       where: {
         followerId_followingId: {
           followerId: viewerId,
-          followingId: ownerId,
+          followingId: room.hostId,
         },
       },
     });
@@ -47,11 +185,11 @@ const canAccessRoom = async (
     return Boolean(follow);
   }
 
-  if (privacy === "FRIENDS") {
+  if (room.privacy === "FRIENDS") {
     const friendship = await prisma.friendship.findFirst({
       where: {
         userId: viewerId,
-        friendId: ownerId,
+        friendId: room.hostId,
       },
     });
 
@@ -61,30 +199,56 @@ const canAccessRoom = async (
   return false;
 };
 
-const serializeRoom = (room: any, viewerId: string) => {
+const serializeRoom = async (room: any, viewerId: string) => {
+  const liveParticipants = await listLiveParticipants(room.id);
   const viewerParticipant = room.participants.find((participant: any) => participant.userId === viewerId) ?? null;
   const viewerRole = viewerParticipant?.role ?? null;
   const isOwner = viewerRole === "OWNER";
   const isAdmin = viewerRole === "ADMIN";
 
+  const participants = room.participants.map((participant: any) => {
+    const liveParticipant = liveParticipants.get(participant.userId);
+    const microphoneTrack = getMicrophoneTrack(liveParticipant);
+    const liveState: ParticipantState | null =
+      participant.isMutedByModerator || microphoneTrack?.muted
+        ? "MUTED"
+        : liveParticipant?.isPublisher
+          ? "SPEAKING"
+          : liveParticipant
+            ? "LISTENING"
+            : null;
+
+    return {
+      ...participant,
+      state: liveState ?? participant.state,
+      isConnected: Boolean(liveParticipant),
+      isSpeakingLive: Boolean(liveParticipant?.isPublisher && microphoneTrack && !microphoneTrack.muted),
+      isMicEnabled: Boolean(microphoneTrack && !microphoneTrack.muted && !participant.isMutedByModerator),
+      isMutedByModerator: participant.isMutedByModerator,
+      canBeRemoved:
+        (isOwner && participant.role !== "OWNER" && participant.userId !== viewerId) ||
+        (isAdmin && participant.role === "MEMBER" && participant.userId !== viewerId),
+      canPromote: isOwner && participant.role === "MEMBER" && participant.userId !== viewerId,
+      canDemote: isOwner && participant.role === "ADMIN" && participant.userId !== viewerId,
+      canMute:
+        (isOwner && participant.role !== "OWNER" && participant.userId !== viewerId) ||
+        (isAdmin && participant.role === "MEMBER" && participant.userId !== viewerId),
+      canUnmute:
+        participant.isMutedByModerator &&
+        ((isOwner && participant.role !== "OWNER" && participant.userId !== viewerId) ||
+          (isAdmin && participant.role === "MEMBER" && participant.userId !== viewerId)),
+    };
+  });
+
   return {
     ...room,
-    participantsCount: room.participants.length,
+    participantsCount: liveParticipants.size || participants.length,
     owner: room.host,
     viewerRole,
     canJoin: room.status === "LIVE" && !viewerParticipant,
     canEdit: isOwner,
     canModerate: isOwner || isAdmin,
-    participants: room.participants.map((participant: any) => ({
-      ...participant,
-      canBeRemoved:
-        (isOwner && participant.role !== "OWNER" && participant.userId !== viewerId) ||
-        (isAdmin && participant.role === "MEMBER" && participant.userId !== viewerId),
-      canPromote:
-        isOwner && participant.role === "MEMBER" && participant.userId !== viewerId,
-      canDemote:
-        isOwner && participant.role === "ADMIN" && participant.userId !== viewerId,
-    })),
+    participants,
   };
 };
 
@@ -96,6 +260,11 @@ const getParticipant = async (roomId: string, userId: string) =>
         userId,
       },
     },
+    include: {
+      user: {
+        select: userSelect,
+      },
+    },
   });
 
 const requireRoomAccess = async (viewerId: string, roomId: string) => {
@@ -104,7 +273,7 @@ const requireRoomAccess = async (viewerId: string, roomId: string) => {
     include: roomInclude,
   });
 
-  const hasAccess = await canAccessRoom(viewerId, room.hostId, room.privacy);
+  const hasAccess = await canAccessRoom(viewerId, room);
 
   if (!hasAccess) {
     throw new ApiError(StatusCodes.FORBIDDEN, "You do not have access to this room");
@@ -138,8 +307,8 @@ export const voiceRoomService = {
     const visibleRooms = [];
 
     for (const room of rooms) {
-      if (await canAccessRoom(userId, room.hostId, room.privacy)) {
-        visibleRooms.push(serializeRoom(room, userId));
+      if (await canAccessRoom(userId, room)) {
+        visibleRooms.push(await serializeRoom(room, userId));
       }
     }
 
@@ -157,8 +326,8 @@ export const voiceRoomService = {
       title: string;
       topic?: string;
       description?: string;
-      privacy?: "PUBLIC" | "FOLLOWERS" | "FRIENDS" | "INVITE_ONLY";
-      theme?: "SUNSET" | "AURORA" | "LOUNGE" | "PARTY";
+      privacy?: RoomPrivacy;
+      theme?: RoomTheme;
     },
   ) {
     const room = await prisma.voiceRoom.create({
@@ -173,13 +342,14 @@ export const voiceRoomService = {
           create: {
             userId,
             role: "OWNER",
-            state: "SPEAKING",
+            state: "LISTENING",
           },
         },
       },
       include: roomInclude,
     });
 
+    await syncLiveKitRoom(room);
     return serializeRoom(room, userId);
   },
 
@@ -190,8 +360,8 @@ export const voiceRoomService = {
       title?: string;
       topic?: string | null;
       description?: string | null;
-      privacy?: "PUBLIC" | "FOLLOWERS" | "FRIENDS" | "INVITE_ONLY";
-      theme?: "SUNSET" | "AURORA" | "LOUNGE" | "PARTY";
+      privacy?: RoomPrivacy;
+      theme?: RoomTheme;
     },
   ) {
     const participant = await getParticipant(roomId, userId);
@@ -212,6 +382,7 @@ export const voiceRoomService = {
       include: roomInclude,
     });
 
+    await syncLiveKitRoom(room);
     return serializeRoom(room, userId);
   },
 
@@ -222,7 +393,7 @@ export const voiceRoomService = {
       throw new ApiError(StatusCodes.BAD_REQUEST, "This room has already ended");
     }
 
-    await prisma.voiceParticipant.upsert({
+    const participant = await prisma.voiceParticipant.upsert({
       where: {
         roomId_userId: {
           roomId,
@@ -238,7 +409,14 @@ export const voiceRoomService = {
         role: "MEMBER",
         state: "LISTENING",
       },
+      include: {
+        user: {
+          select: userSelect,
+        },
+      },
     });
+
+    await syncLiveParticipantPermissions(roomId, participant);
 
     if (room.hostId !== userId) {
       await prisma.notification.create({
@@ -263,6 +441,8 @@ export const voiceRoomService = {
       return { left: true };
     }
 
+    await removeLiveParticipant(roomId, userId);
+
     if (participant.role === "OWNER") {
       await prisma.voiceRoom.update({
         where: { id: roomId },
@@ -272,6 +452,7 @@ export const voiceRoomService = {
           endedAt: new Date(),
         },
       });
+      await deleteLiveKitRoom(roomId);
 
       return { left: true, roomEnded: true };
     }
@@ -288,11 +469,15 @@ export const voiceRoomService = {
     return { left: true };
   },
 
-  async setParticipantState(userId: string, roomId: string, state: "LISTENING" | "SPEAKING" | "MUTED") {
+  async setParticipantState(userId: string, roomId: string, state: ParticipantState) {
     const participant = await getParticipant(roomId, userId);
 
     if (!participant) {
       throw new ApiError(StatusCodes.FORBIDDEN, "Join the room before updating your state");
+    }
+
+    if (participant.isMutedByModerator && state !== "MUTED") {
+      throw new ApiError(StatusCodes.FORBIDDEN, "A moderator has muted your microphone");
     }
 
     const updated = await prisma.voiceParticipant.update({
@@ -305,8 +490,14 @@ export const voiceRoomService = {
       data: {
         state,
       },
+      include: {
+        user: {
+          select: userSelect,
+        },
+      },
     });
 
+    await syncLiveParticipantPermissions(roomId, updated);
     return updated;
   },
 
@@ -327,7 +518,7 @@ export const voiceRoomService = {
       throw new ApiError(StatusCodes.BAD_REQUEST, "The owner role cannot be reassigned here");
     }
 
-    return prisma.voiceParticipant.update({
+    const updated = await prisma.voiceParticipant.update({
       where: {
         roomId_userId: {
           roomId,
@@ -337,7 +528,53 @@ export const voiceRoomService = {
       data: {
         role,
       },
+      include: {
+        user: {
+          select: userSelect,
+        },
+      },
     });
+
+    await syncLiveParticipantPermissions(roomId, updated);
+    return updated;
+  },
+
+  async setParticipantModeration(userId: string, roomId: string, participantUserId: string, muted: boolean) {
+    const { room, actorParticipant } = await requireModerationRights(userId, roomId);
+    const participant = room.participants.find((entry: any) => entry.userId === participantUserId);
+
+    if (!participant) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Participant not found");
+    }
+
+    if (participant.role === "OWNER") {
+      throw new ApiError(StatusCodes.FORBIDDEN, "The owner cannot be moderated by room staff");
+    }
+
+    if (actorParticipant.role === "ADMIN" && participant.role !== "MEMBER") {
+      throw new ApiError(StatusCodes.FORBIDDEN, "Admins can only moderate members");
+    }
+
+    const updated = await prisma.voiceParticipant.update({
+      where: {
+        roomId_userId: {
+          roomId,
+          userId: participantUserId,
+        },
+      },
+      data: {
+        isMutedByModerator: muted,
+        state: muted ? "MUTED" : "LISTENING",
+      },
+      include: {
+        user: {
+          select: userSelect,
+        },
+      },
+    });
+
+    await syncLiveParticipantPermissions(roomId, updated);
+    return updated;
   },
 
   async removeParticipant(userId: string, roomId: string, participantUserId: string) {
@@ -364,6 +601,7 @@ export const voiceRoomService = {
         },
       },
     });
+    await removeLiveParticipant(roomId, participantUserId);
 
     return { removed: true };
   },
@@ -385,6 +623,7 @@ export const voiceRoomService = {
       include: roomInclude,
     });
 
+    await deleteLiveKitRoom(roomId);
     return serializeRoom(room, userId);
   },
 
@@ -393,45 +632,55 @@ export const voiceRoomService = {
       throw new ApiError(StatusCodes.SERVICE_UNAVAILABLE, "Live voice transport is not configured");
     }
 
-    const room = await requireRoomAccess(userId, roomId);
+    let room = await requireRoomAccess(userId, roomId);
 
     if (room.status !== "LIVE") {
       throw new ApiError(StatusCodes.BAD_REQUEST, "This room is no longer live");
     }
 
-    const participant = room.participants.find((entry: any) => entry.userId === userId);
+    let participant = room.participants.find((entry: any) => entry.userId === userId);
 
     if (!participant) {
       await this.join(userId, roomId);
+      room = await requireRoomAccess(userId, roomId);
+      participant = room.participants.find((entry: any) => entry.userId === userId);
     }
+
+    if (!participant) {
+      throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Unable to attach you to the voice room");
+    }
+
+    await syncLiveKitRoom(room);
 
     const accessToken = new AccessToken(env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET, {
       identity: userId,
-      name: room.participants.find((entry: any) => entry.userId === userId)?.user.firstName ?? room.host.firstName ?? "Faceme user",
+      name: participant.user.firstName ?? participant.user.username ?? room.host.firstName ?? "Faceme user",
       ttl: "2h",
       metadata: JSON.stringify({
         roomId,
-        role: participant?.role ?? "MEMBER",
+        role: participant.role,
+        isMutedByModerator: participant.isMutedByModerator,
       }),
       attributes: {
         facemeRoomId: roomId,
-        facemeRole: participant?.role ?? "MEMBER",
+        facemeRole: participant.role,
+        facemeMutedByModerator: String(participant.isMutedByModerator),
       },
     });
 
     accessToken.addGrant({
       roomJoin: true,
-      room: roomId,
-      canPublish: true,
+      room: getRoomName(roomId),
+      canPublish: !participant.isMutedByModerator,
       canSubscribe: true,
       canPublishData: true,
-      roomAdmin: participant?.role === "OWNER" || participant?.role === "ADMIN",
+      roomAdmin: participant.role === "OWNER" || participant.role === "ADMIN",
     });
 
     return {
       serverUrl: env.LIVEKIT_URL,
       token: await accessToken.toJwt(),
-      roomName: roomId,
+      roomName: getRoomName(roomId),
     };
   },
 };

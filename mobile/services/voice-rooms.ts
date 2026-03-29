@@ -49,6 +49,10 @@ export const voiceRoomService = {
     const { data } = await api.post(`/voice-rooms/${roomId}/participants/${userId}/role`, { role });
     return data;
   },
+  async setModeration(roomId: string, userId: string, muted: boolean) {
+    const { data } = await api.post(`/voice-rooms/${roomId}/participants/${userId}/moderation`, { muted });
+    return data;
+  },
   async issueAudioToken(roomId: string) {
     const { data } = await api.post(`/voice-rooms/${roomId}/audio-token`);
     return data as { serverUrl: string; token: string; roomName: string };

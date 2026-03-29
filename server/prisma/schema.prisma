@@ -622,6 +622,7 @@ model VoiceParticipant {
   userId       String
   role         ParticipantRole       @default(MEMBER)
   state        VoiceParticipantState @default(LISTENING)
+  isMutedByModerator Boolean         @default(false)
   joinedAt     DateTime               @default(now())
   room         VoiceRoom              @relation(fields: [roomId], references: [id], onDelete: Cascade)
   user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)

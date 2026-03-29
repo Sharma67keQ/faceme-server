@@ -14,6 +14,7 @@ voiceRoomRouter.post("/:roomId/join", asyncHandler(voiceRoomController.join));
 voiceRoomRouter.post("/:roomId/leave", asyncHandler(voiceRoomController.leave));
 voiceRoomRouter.post("/:roomId/state", asyncHandler(voiceRoomController.setState));
 voiceRoomRouter.post("/:roomId/participants/:userId/role", asyncHandler(voiceRoomController.setRole));
+voiceRoomRouter.post("/:roomId/participants/:userId/moderation", asyncHandler(voiceRoomController.setParticipantModeration));
 voiceRoomRouter.delete("/:roomId/participants/:userId", asyncHandler(voiceRoomController.removeParticipant));
 voiceRoomRouter.post("/:roomId/audio-token", asyncHandler(voiceRoomController.issueAudioToken));
 voiceRoomRouter.post("/:roomId/end", asyncHandler(voiceRoomController.endRoom));

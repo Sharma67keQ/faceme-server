@@ -306,9 +306,15 @@ export type VoiceRoom = {
     id: string;
     role: "OWNER" | "ADMIN" | "MEMBER";
     state: "LISTENING" | "SPEAKING" | "MUTED";
+    isConnected?: boolean;
+    isSpeakingLive?: boolean;
+    isMicEnabled?: boolean;
+    isMutedByModerator?: boolean;
     canBeRemoved?: boolean;
     canPromote?: boolean;
     canDemote?: boolean;
+    canMute?: boolean;
+    canUnmute?: boolean;
     user: User;
   }>;
 };

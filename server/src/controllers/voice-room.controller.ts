@@ -83,6 +83,14 @@ export const voiceRoomController = {
     return res.status(StatusCodes.OK).json(result);
   },
 
+  async setParticipantModeration(req: Request, res: Response) {
+    const roomId = z.string().min(1).parse(req.params.roomId);
+    const participantUserId = z.string().min(1).parse(req.params.userId);
+    const payload = z.object({ muted: z.boolean() }).parse(req.body);
+    const result = await voiceRoomService.setParticipantModeration(req.user!.id, roomId, participantUserId, payload.muted);
+    return res.status(StatusCodes.OK).json(result);
+  },
+
   async endRoom(req: Request, res: Response) {
     const roomId = z.string().min(1).parse(req.params.roomId);
     const room = await voiceRoomService.endRoom(req.user!.id, roomId);

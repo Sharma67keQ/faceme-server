@@ -63,18 +63,16 @@ const requireConfiguredUrl = (value: string, fallback: string, label: string) =>
   return value;
 };
 
+const resolveApiBaseUrl = () => {
+  const configuredApiSource = requireConfiguredUrl(apiSource, defaultApiBase, "EXPO_PUBLIC_API_URL");
+  const url = new URL(configuredApiSource);
+  const origin = resolveOrigin(configuredApiSource, defaultSocketBase);
+  return `${origin}${url.pathname}`;
+};
+
 export const runtimeConfig = {
   appEnv,
-  apiBaseUrl: (() => {
-    try {
-      const configuredApiSource = requireConfiguredUrl(apiSource, defaultApiBase, "EXPO_PUBLIC_API_URL");
-      const url = new URL(configuredApiSource);
-      const origin = resolveOrigin(configuredApiSource, defaultSocketBase);
-      return `${origin}${url.pathname}`;
-    } catch {
-      return defaultApiBase;
-    }
-  })(),
+  apiBaseUrl: resolveApiBaseUrl(),
   socketUrl: resolveOrigin(
     requireConfiguredUrl(socketSource, defaultSocketBase, "EXPO_PUBLIC_SOCKET_URL"),
     defaultSocketBase,
