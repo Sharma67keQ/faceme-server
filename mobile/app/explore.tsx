@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { PostCard } from "@/components/post-card";
+import { Avatar } from "@/components/ui/avatar";
 import { Screen } from "@/components/ui/screen";
 import { socialService } from "@/services/social";
-import { Avatar } from "@/components/ui/avatar";
 import { colors, radius, spacing } from "@/utils/theme";
 
 export default function ExploreScreen() {
@@ -12,6 +12,11 @@ export default function ExploreScreen() {
     queryKey: ["explore-hub"],
     queryFn: socialService.getExploreHub,
   });
+  const activeDiscussions = data?.activeDiscussions ?? [];
+  const suggestedUsers = data?.suggestedUsers ?? [];
+  const suggestedPages = data?.suggestedPages ?? [];
+  const suggestedGroups = data?.suggestedGroups ?? [];
+  const trendingPosts = data?.trendingPosts ?? [];
 
   return (
     <Screen>
@@ -23,36 +28,32 @@ export default function ExploreScreen() {
           Could not load explore. Tap to retry.
         </Text>
       ) : null}
-      {!isLoading && !isError && !data?.trendingPosts?.length ? (
+      {!isLoading && !isError && !trendingPosts.length ? (
         <Text style={styles.feedback}>No explore posts available yet.</Text>
       ) : null}
-      {data?.activeDiscussions?.length ? (
+      {activeDiscussions.length ? (
         <>
           <Text style={styles.sectionTitle}>Active discussions</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-            {data.activeDiscussions.map((discussion) => (
+            {activeDiscussions.map((discussion) => (
               <View key={discussion.id} style={styles.discussionCard}>
                 <Text style={styles.discussionTitle} numberOfLines={3}>
                   {discussion.body}
                 </Text>
                 <Text style={styles.discussionMeta}>
-                  {discussion.commentsCount} replies • @{discussion.author.username}
+                  {discussion.commentsCount} replies {"\u2022"} @{discussion.author.username}
                 </Text>
               </View>
             ))}
           </ScrollView>
         </>
       ) : null}
-      {data?.suggestedUsers?.length ? (
+      {suggestedUsers.length ? (
         <>
           <Text style={styles.sectionTitle}>Suggested users</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-            {data.suggestedUsers.map((user) => (
-              <Pressable
-                key={user.id}
-                style={styles.userCard}
-                onPress={() => router.push(`/profile/${user.username}`)}
-              >
+            {suggestedUsers.map((user) => (
+              <Pressable key={user.id} style={styles.userCard} onPress={() => router.push(`/profile/${user.username}`)}>
                 <Avatar name={user.firstName ?? user.username} />
                 <Text style={styles.userName}>{user.firstName ?? user.username}</Text>
                 <Text style={styles.userMeta}>@{user.username}</Text>
@@ -62,11 +63,11 @@ export default function ExploreScreen() {
           </ScrollView>
         </>
       ) : null}
-      {data?.suggestedPages?.length ? (
+      {suggestedPages.length ? (
         <>
           <Text style={styles.sectionTitle}>Suggested pages</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-            {data.suggestedPages.map((page) => (
+            {suggestedPages.map((page) => (
               <Pressable key={page.id} style={styles.entityCard} onPress={() => router.push(`/page/${page.slug}` as never)}>
                 <Text style={styles.entityTitle}>{page.name}</Text>
                 <Text style={styles.entityMeta}>{page.followersCount} followers</Text>
@@ -75,15 +76,15 @@ export default function ExploreScreen() {
           </ScrollView>
         </>
       ) : null}
-      {data?.suggestedGroups?.length ? (
+      {suggestedGroups.length ? (
         <>
           <Text style={styles.sectionTitle}>Suggested groups</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-            {data.suggestedGroups.map((group) => (
+            {suggestedGroups.map((group) => (
               <Pressable key={group.id} style={styles.entityCard} onPress={() => router.push(`/group/${group.slug}` as never)}>
                 <Text style={styles.entityTitle}>{group.name}</Text>
                 <Text style={styles.entityMeta}>
-                  {group.membersCount} members • {group.discussionCount} replies
+                  {group.membersCount} members {"\u2022"} {group.discussionCount} replies
                 </Text>
               </Pressable>
             ))}
@@ -91,7 +92,7 @@ export default function ExploreScreen() {
         </>
       ) : null}
       <ScrollView contentContainerStyle={styles.list}>
-        {data?.trendingPosts?.map((post) => (
+        {trendingPosts.map((post) => (
           <PostCard key={post.id} post={post} />
         ))}
       </ScrollView>

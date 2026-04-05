@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 14.0.0"
+    "version": ">= 14.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -12,14 +13,23 @@
     },
     "preview": {
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
-        "EXPO_PUBLIC_APP_ENV": "production"
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://faceme-server.onrender.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://faceme-server.onrender.com",
+        "EXPO_PUBLIC_LIVEKIT_URL": "wss://faceme-room-a7k9-9jt0ys2r.livekit.cloud"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_APP_ENV": "production"
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://faceme-server.onrender.com/api",
+        "EXPO_PUBLIC_SOCKET_URL": "https://faceme-server.onrender.com",
+        "EXPO_PUBLIC_LIVEKIT_URL": "wss://faceme-room-a7k9-9jt0ys2r.livekit.cloud"
       }
     }
   },

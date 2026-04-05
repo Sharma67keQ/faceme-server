@@ -6,12 +6,14 @@ import { notificationService } from "@/services/notifications";
 import { colors, radius, spacing } from "@/utils/theme";
 
 const formatTimestamp = (value: string) =>
-  new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+  Number.isNaN(new Date(value).getTime())
+    ? "Unknown time"
+    : new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(value));
 
 export default function NotificationsScreen() {
   const queryClient = useQueryClient();
@@ -59,7 +61,7 @@ export default function NotificationsScreen() {
             {!item.isRead ? <View style={styles.unreadDot} /> : null}
           </View>
           <Text style={styles.meta}>
-            {item.actor ? `${item.actor.firstName} - ` : ""}
+            {item.actor ? `${item.actor.firstName ?? item.actor.username} - ` : ""}
             {formatTimestamp(item.createdAt)}
           </Text>
           <Text style={styles.body}>{item.body ?? "No additional details."}</Text>

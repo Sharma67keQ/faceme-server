@@ -1,12 +1,13 @@
 import { Redirect } from "expo-router";
 import { PropsWithChildren } from "react";
+import { AppBootstrap } from "@/components/app-bootstrap";
 import { useAuthStore } from "@/store/auth-store";
 
 export const AuthGuard = ({ children }: PropsWithChildren) => {
   const { accessToken, isHydrated, user } = useAuthStore();
 
   if (!isHydrated) {
-    return null;
+    return <AppBootstrap />;
   }
 
   if (!accessToken) {
@@ -24,7 +25,7 @@ export const GuestGuard = ({ children }: PropsWithChildren) => {
   const { accessToken, isHydrated, user } = useAuthStore();
 
   if (!isHydrated) {
-    return null;
+    return <AppBootstrap />;
   }
 
   if (accessToken) {

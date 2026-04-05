@@ -14,6 +14,10 @@ const extractExpoHost = () => {
   return hostUri.split(":")[0] ?? null;
 };
 
+const warnInvalidConfig = (label: string, value: string) => {
+  console.warn(`[runtime-config] Invalid ${label}: "${value}". Falling back to a safe default.`);
+};
+
 const resolveOrigin = (value: string, fallbackOrigin: string) => {
   try {
     const url = new URL(value);
@@ -31,6 +35,7 @@ const resolveOrigin = (value: string, fallbackOrigin: string) => {
     url.hostname = expoHost;
     return url.origin;
   } catch {
+    warnInvalidConfig("origin", value);
     return fallbackOrigin;
   }
 };
@@ -51,31 +56,39 @@ const apiSource = process.env.EXPO_PUBLIC_API_URL ?? defaultApiBase;
 const socketSource = process.env.EXPO_PUBLIC_SOCKET_URL ?? defaultSocketBase;
 const liveKitSource = process.env.EXPO_PUBLIC_LIVEKIT_URL ?? defaultLiveKitBase;
 
-const requireConfiguredUrl = (value: string, fallback: string, label: string) => {
-  if (appEnv !== "production") {
-    return value;
+const resolveConfiguredUrl = (value: string, fallback: string, label: string) => {
+  if (!value) {
+    return fallback;
   }
 
-  if (value === fallback) {
-    throw new Error(`${label} must be configured for production builds.`);
+  try {
+    const url = new URL(value);
+    return url.toString();
+  } catch {
+    warnInvalidConfig(label, value);
+    return fallback;
   }
-
-  return value;
 };
 
 const resolveApiBaseUrl = () => {
-  const configuredApiSource = requireConfiguredUrl(apiSource, defaultApiBase, "EXPO_PUBLIC_API_URL");
-  const url = new URL(configuredApiSource);
-  const origin = resolveOrigin(configuredApiSource, defaultSocketBase);
-  return `${origin}${url.pathname}`;
+  const configuredApiSource = resolveConfiguredUrl(apiSource, defaultApiBase, "EXPO_PUBLIC_API_URL");
+
+  try {
+    const url = new URL(configuredApiSource);
+    const origin = resolveOrigin(configuredApiSource, defaultSocketBase);
+    return `${origin}${url.pathname}`;
+  } catch {
+    warnInvalidConfig("EXPO_PUBLIC_API_URL", configuredApiSource);
+    return defaultApiBase;
+  }
 };
 
 export const runtimeConfig = {
   appEnv,
   apiBaseUrl: resolveApiBaseUrl(),
   socketUrl: resolveOrigin(
-    requireConfiguredUrl(socketSource, defaultSocketBase, "EXPO_PUBLIC_SOCKET_URL"),
+    resolveConfiguredUrl(socketSource, defaultSocketBase, "EXPO_PUBLIC_SOCKET_URL"),
     defaultSocketBase,
   ),
-  liveKitUrl: liveKitSource || null,
+  liveKitUrl: liveKitSource ? resolveConfiguredUrl(liveKitSource, defaultLiveKitBase, "EXPO_PUBLIC_LIVEKIT_URL") : null,
 };

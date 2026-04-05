@@ -32,7 +32,7 @@ export default function StoryViewerScreen() {
       {isLoading ? <Text style={styles.feedback}>Loading story...</Text> : null}
       {story ? (
         <View style={styles.card}>
-          <Text style={styles.author}>{story.author.firstName}</Text>
+          <Text style={styles.author}>{story.author.firstName ?? story.author.username}</Text>
           <Text style={styles.mediaLabel}>{story.mediaType} story</Text>
           <Text style={styles.url}>{story.mediaUrl}</Text>
           {story.caption ? <Text style={styles.caption}>{story.caption}</Text> : null}

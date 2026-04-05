@@ -21,7 +21,7 @@ export default function ProfileScreen() {
   ] as const;
   const { data: posts = [] } = useQuery({
     queryKey: ["my-profile-posts", user?.username],
-    queryFn: () => userService.getUserPostsByUsername(user!.username),
+    queryFn: () => (user?.username ? userService.getUserPostsByUsername(user.username) : Promise.resolve([])),
     enabled: Boolean(user?.username),
   });
 

@@ -47,32 +47,37 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: result.user, accessToken: result.accessToken, isHydrated: true });
   },
   async hydrate() {
-    const accessToken = await tokenStorage.getAccessToken();
-
-    if (!accessToken) {
-      set({ isHydrated: true });
-      return;
-    }
-
     try {
-      const user = await authService.fetchMe();
-      set({ user, accessToken, isHydrated: true });
-    } catch {
-      const nextAccessToken = await useAuthStore.getState().refreshSession();
+      const accessToken = await tokenStorage.getAccessToken();
 
-      if (!nextAccessToken) {
-        await useAuthStore.getState().clearSession();
+      if (!accessToken) {
         set({ isHydrated: true });
         return;
       }
 
       try {
         const user = await authService.fetchMe();
-        set({ user, accessToken: nextAccessToken, isHydrated: true });
+        set({ user, accessToken, isHydrated: true });
       } catch {
-        await useAuthStore.getState().clearSession();
-        set({ isHydrated: true });
+        const nextAccessToken = await useAuthStore.getState().refreshSession();
+
+        if (!nextAccessToken) {
+          await useAuthStore.getState().clearSession();
+          set({ isHydrated: true });
+          return;
+        }
+
+        try {
+          const user = await authService.fetchMe();
+          set({ user, accessToken: nextAccessToken, isHydrated: true });
+        } catch {
+          await useAuthStore.getState().clearSession();
+          set({ isHydrated: true });
+        }
       }
+    } catch {
+      await useAuthStore.getState().clearSession();
+      set({ isHydrated: true });
     }
   },
   async refreshSession() {

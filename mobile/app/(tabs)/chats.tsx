@@ -93,7 +93,7 @@ export default function ChatsScreen() {
               <View style={styles.searchMeta}>
                 <Avatar name={user.firstName ?? user.username} />
                 <View style={styles.searchText}>
-                  <Text style={styles.name}>{user.firstName}</Text>
+                  <Text style={styles.name}>{user.firstName ?? user.username}</Text>
                   <Text style={styles.preview}>@{user.username}</Text>
                 </View>
               </View>
@@ -122,7 +122,7 @@ export default function ChatsScreen() {
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Recent conversations</Text>
         <Text style={styles.sectionMeta}>
-          {data?.length ?? 0} active · {unreadTotal} unread
+          {data?.length ?? 0} active {"\u00B7"} {unreadTotal} unread
         </Text>
       </View>
       <ScrollView contentContainerStyle={styles.list}>

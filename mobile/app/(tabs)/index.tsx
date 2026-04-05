@@ -86,6 +86,10 @@ export default function FeedScreen() {
       await queryClient.invalidateQueries({ queryKey: ["launch-summary"] });
     },
   });
+  const launchFriendRequests = launch?.friendRequests?.incoming ?? [];
+  const launchSuggestedPages = launch?.onboarding?.suggestedPages ?? [];
+  const launchSuggestedGroups = launch?.onboarding?.suggestedGroups ?? [];
+  const enabledFeatureFlags = launch?.featureFlags?.filter((flag) => flag.isEnabled).length ?? 0;
 
   const activeNowPosts = [...(data ?? [])]
     .sort((left, right) => (right._count.comments + right._count.likes) - (left._count.comments + left._count.likes))
@@ -218,15 +222,15 @@ export default function FeedScreen() {
         </View>
         <View style={styles.launchMetrics}>
           <View style={styles.launchMetric}>
-            <Text style={styles.metricValue}>{launch?.featureFlags?.filter((flag) => flag.isEnabled).length ?? 0}</Text>
+            <Text style={styles.metricValue}>{enabledFeatureFlags}</Text>
             <Text style={styles.metricLabel}>Live flags</Text>
           </View>
           <View style={styles.launchMetric}>
-            <Text style={styles.metricValue}>{launch?.friendRequests?.incoming.length ?? 0}</Text>
+            <Text style={styles.metricValue}>{launchFriendRequests.length}</Text>
             <Text style={styles.metricLabel}>Requests</Text>
           </View>
           <View style={styles.launchMetric}>
-            <Text style={styles.metricValue}>{launch?.onboarding?.suggestedGroups.length ?? 0}</Text>
+            <Text style={styles.metricValue}>{launchSuggestedGroups.length}</Text>
             <Text style={styles.metricLabel}>Groups</Text>
           </View>
         </View>
@@ -237,14 +241,14 @@ export default function FeedScreen() {
         ) : null}
       </View>
 
-      {launch?.friendRequests?.incoming.length ? (
+      {launchFriendRequests.length ? (
         <>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Friend requests</Text>
-            <Text style={styles.sectionMeta}>{launch.friendRequests.incoming.length}</Text>
+            <Text style={styles.sectionMeta}>{launchFriendRequests.length}</Text>
           </View>
           <View style={styles.requestList}>
-            {launch.friendRequests.incoming.map((request) => (
+            {launchFriendRequests.map((request) => (
               <View key={request.id} style={styles.requestCard}>
                 <View style={styles.requestIdentity}>
                   <Avatar name={request.user.firstName ?? request.user.username} />
@@ -273,14 +277,14 @@ export default function FeedScreen() {
         </>
       ) : null}
 
-      {launch?.onboarding?.suggestedPages?.length ? (
+      {launchSuggestedPages.length ? (
         <>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Suggested pages</Text>
-            <Text style={styles.sectionMeta}>{launch.onboarding.suggestedPages.length}</Text>
+            <Text style={styles.sectionMeta}>{launchSuggestedPages.length}</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
-            {launch.onboarding.suggestedPages.map((page) => (
+            {launchSuggestedPages.map((page) => (
               <Pressable key={page.id} style={styles.socialCard} onPress={() => router.push(`/page/${page.slug}` as never)}>
                 <Text style={styles.socialTitle}>{page.name}</Text>
                 <Text style={styles.socialMeta}>{page.followersCount} followers</Text>
@@ -296,14 +300,14 @@ export default function FeedScreen() {
         </>
       ) : null}
 
-      {launch?.onboarding?.suggestedGroups?.length ? (
+      {launchSuggestedGroups.length ? (
         <>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Suggested groups</Text>
-            <Text style={styles.sectionMeta}>{launch.onboarding.suggestedGroups.length}</Text>
+            <Text style={styles.sectionMeta}>{launchSuggestedGroups.length}</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionRow}>
-            {launch.onboarding.suggestedGroups.map((group) => (
+            {launchSuggestedGroups.map((group) => (
               <Pressable key={group.id} style={styles.socialCard} onPress={() => router.push(`/group/${group.slug}` as never)}>
                 <Text style={styles.socialTitle}>{group.name}</Text>
                 <Text style={styles.socialMeta}>

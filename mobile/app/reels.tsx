@@ -284,16 +284,16 @@ const ReelCard = ({
         onPress={onComment}
         disabled={commentPending || !commentDraft.trim()}
       />
-      {reel.comments?.length ? (
+      {(reel.comments ?? []).length ? (
         <View style={styles.commentList}>
-          {reel.comments.slice(0, 4).map((comment) => (
+          {(reel.comments ?? []).slice(0, 4).map((comment) => (
             <View key={comment.id} style={styles.commentCard}>
               <Pressable onPress={() => router.push(`/profile/${comment.author.username}`)}>
                 <Text style={styles.commentAuthor}>@{comment.author.username}</Text>
               </Pressable>
               <Text style={styles.commentBody}>{comment.body}</Text>
-              {comment.replies.length ? (
-                <Text style={styles.commentMeta}>{comment.replies.length} replies in thread</Text>
+              {(comment.replies ?? []).length ? (
+                <Text style={styles.commentMeta}>{(comment.replies ?? []).length} replies in thread</Text>
               ) : null}
             </View>
           ))}

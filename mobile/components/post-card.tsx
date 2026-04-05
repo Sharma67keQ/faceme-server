@@ -4,9 +4,9 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { MediaAttachmentPreview } from "@/components/media-attachment-preview";
-import { Comment, Post } from "@/types/domain";
 import { postService } from "@/services/posts";
 import { useAuthStore } from "@/store/auth-store";
+import { Comment, Post } from "@/types/domain";
 import { colors, radius, spacing } from "@/utils/theme";
 import { Avatar } from "./ui/avatar";
 
@@ -19,7 +19,7 @@ type PostCardProps = {
   isCommenting?: boolean;
 };
 
-const QUICK_EMOJIS = ["🔥", "👏", "😂"];
+const QUICK_EMOJIS = ["\u{1F525}", "\u{1F44F}", "\u{1F602}"];
 
 const ProfileIdentity = ({
   firstName,
@@ -39,6 +39,20 @@ const ProfileIdentity = ({
   </Pressable>
 );
 
+const getReactionSummary = (comment: Comment) =>
+  comment.reactionSummary ?? {
+    likes: 0,
+    dislikes: 0,
+    emojis: [],
+  };
+
+const getViewerReactions = (comment: Comment) =>
+  comment.viewerReactions ?? {
+    like: false,
+    dislike: false,
+    emojis: [],
+  };
+
 const CommentReactionBar = ({
   comment,
   onReact,
@@ -47,39 +61,44 @@ const CommentReactionBar = ({
   comment: Comment;
   onReact: (payload: { type: "LIKE" | "DISLIKE" | "EMOJI"; emoji?: string }) => void;
   compact?: boolean;
-}) => (
-  <View style={[styles.commentReactionRow, compact ? styles.commentReactionRowCompact : null]}>
-    <Pressable
-      style={[styles.reactionChip, comment.viewerReactions.like ? styles.reactionChipActive : null]}
-      onPress={() => onReact({ type: "LIKE" })}
-    >
-      <Ionicons name="thumbs-up-outline" color={colors.primaryDark} size={14} />
-      <Text style={styles.reactionChipLabel}>{comment.reactionSummary.likes}</Text>
-    </Pressable>
-    <Pressable
-      style={[styles.reactionChip, comment.viewerReactions.dislike ? styles.reactionChipActive : null]}
-      onPress={() => onReact({ type: "DISLIKE" })}
-    >
-      <Ionicons name="thumbs-down-outline" color={colors.primaryDark} size={14} />
-      <Text style={styles.reactionChipLabel}>{comment.reactionSummary.dislikes}</Text>
-    </Pressable>
-    {QUICK_EMOJIS.map((emoji) => {
-      const existing = comment.reactionSummary.emojis.find((item) => item.emoji === emoji);
-      const reacted = comment.viewerReactions.emojis.includes(emoji);
+}) => {
+  const reactionSummary = getReactionSummary(comment);
+  const viewerReactions = getViewerReactions(comment);
 
-      return (
-        <Pressable
-          key={`${comment.id}-${emoji}`}
-          style={[styles.reactionChip, reacted ? styles.reactionChipActive : null]}
-          onPress={() => onReact({ type: "EMOJI", emoji })}
-        >
-          <Text style={styles.emojiText}>{emoji}</Text>
-          <Text style={styles.reactionChipLabel}>{existing?.count ?? 0}</Text>
-        </Pressable>
-      );
-    })}
-  </View>
-);
+  return (
+    <View style={[styles.commentReactionRow, compact ? styles.commentReactionRowCompact : null]}>
+      <Pressable
+        style={[styles.reactionChip, viewerReactions.like ? styles.reactionChipActive : null]}
+        onPress={() => onReact({ type: "LIKE" })}
+      >
+        <Ionicons name="thumbs-up-outline" color={colors.primaryDark} size={14} />
+        <Text style={styles.reactionChipLabel}>{reactionSummary.likes}</Text>
+      </Pressable>
+      <Pressable
+        style={[styles.reactionChip, viewerReactions.dislike ? styles.reactionChipActive : null]}
+        onPress={() => onReact({ type: "DISLIKE" })}
+      >
+        <Ionicons name="thumbs-down-outline" color={colors.primaryDark} size={14} />
+        <Text style={styles.reactionChipLabel}>{reactionSummary.dislikes}</Text>
+      </Pressable>
+      {QUICK_EMOJIS.map((emoji) => {
+        const existing = reactionSummary.emojis.find((item) => item.emoji === emoji);
+        const reacted = viewerReactions.emojis.includes(emoji);
+
+        return (
+          <Pressable
+            key={`${comment.id}-${emoji}`}
+            style={[styles.reactionChip, reacted ? styles.reactionChipActive : null]}
+            onPress={() => onReact({ type: "EMOJI", emoji })}
+          >
+            <Text style={styles.emojiText}>{emoji}</Text>
+            <Text style={styles.reactionChipLabel}>{existing?.count ?? 0}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+};
 
 const CommentItem = ({
   comment,
@@ -108,104 +127,95 @@ const CommentItem = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editingBody, setEditingBody] = useState(comment.body);
+  const replies = comment.replies ?? [];
 
   return (
     <View style={[styles.commentCard, nested ? styles.replyCard : null]}>
-    <View style={styles.commentHeader}>
-      <ProfileIdentity
-        firstName={comment.author.firstName ?? comment.author.username}
-        username={comment.author.username}
-        avatarSize={nested ? 30 : 36}
-      />
-      <View style={styles.commentHeaderActions}>
-        <Pressable onPress={() => router.push(`/profile/${comment.author.username}`)}>
-          <Text style={styles.viewProfile}>View Profile</Text>
-        </Pressable>
-        {comment.canEdit ? (
-          <>
-            <Pressable onPress={() => setIsEditing((current) => !current)}>
-              <Text style={styles.viewProfile}>{isEditing ? "Cancel" : "Edit"}</Text>
-            </Pressable>
-            <Pressable onPress={() => onDeleteComment(comment.id)}>
-              <Text style={styles.dangerText}>Delete</Text>
-            </Pressable>
-          </>
-        ) : null}
-      </View>
-    </View>
-    {isEditing ? (
-      <View style={styles.replyComposer}>
-        <TextInput
-          value={editingBody}
-          onChangeText={setEditingBody}
-          placeholder="Update comment"
-          placeholderTextColor={colors.textSoft}
-          style={styles.replyInput}
+      <View style={styles.commentHeader}>
+        <ProfileIdentity
+          firstName={comment.author.firstName ?? comment.author.username}
+          username={comment.author.username}
+          avatarSize={nested ? 30 : 36}
         />
-        <Pressable
-          style={styles.replySubmit}
-          onPress={() => void onUpdateComment(comment.id, editingBody).then(() => setIsEditing(false))}
-        >
-          <Text style={styles.replySubmitLabel}>Save</Text>
-        </Pressable>
+        <View style={styles.commentHeaderActions}>
+          <Pressable onPress={() => router.push(`/profile/${comment.author.username}`)}>
+            <Text style={styles.viewProfile}>View Profile</Text>
+          </Pressable>
+          {comment.canEdit ? (
+            <>
+              <Pressable onPress={() => setIsEditing((current) => !current)}>
+                <Text style={styles.viewProfile}>{isEditing ? "Cancel" : "Edit"}</Text>
+              </Pressable>
+              <Pressable onPress={() => onDeleteComment(comment.id)}>
+                <Text style={styles.dangerText}>Delete</Text>
+              </Pressable>
+            </>
+          ) : null}
+        </View>
       </View>
-    ) : (
-      <Text style={styles.commentBody}>{comment.body}</Text>
-    )}
-    <CommentReactionBar
-      comment={comment}
-      onReact={(payload) => onReact(comment.id, payload)}
-      compact={nested}
-    />
-    {!nested ? (
-      <Pressable
-        style={styles.replyButton}
-        onPress={() =>
-          setActiveReplyCommentId(activeReplyCommentId === comment.id ? null : comment.id)
-        }
-      >
-        <Ionicons name="return-up-forward-outline" color={colors.primaryDark} size={14} />
-        <Text style={styles.replyButtonLabel}>Reply</Text>
-      </Pressable>
-    ) : null}
-    {!nested && activeReplyCommentId === comment.id ? (
-      <View style={styles.replyComposer}>
-        <TextInput
-          value={replyBody}
-          onChangeText={setReplyBody}
-          placeholder={`Reply to ${comment.author.firstName}`}
-          placeholderTextColor={colors.textSoft}
-          style={styles.replyInput}
-        />
-        <Pressable
-          style={styles.replySubmit}
-          onPress={() => void onReply(comment.id)}
-          disabled={isReplyPending}
-        >
-          <Text style={styles.replySubmitLabel}>{isReplyPending ? "Posting..." : "Reply"}</Text>
-        </Pressable>
-      </View>
-    ) : null}
-    {comment.replies.length ? (
-      <View style={styles.replyList}>
-        {comment.replies.map((reply) => (
-          <CommentItem
-            key={reply.id}
-            comment={reply}
-            onReply={onReply}
-            onReact={onReact}
-            activeReplyCommentId={activeReplyCommentId}
-            replyBody={replyBody}
-            setReplyBody={setReplyBody}
-            setActiveReplyCommentId={setActiveReplyCommentId}
-            isReplyPending={isReplyPending}
-            onUpdateComment={onUpdateComment}
-            onDeleteComment={onDeleteComment}
-            nested
+      {isEditing ? (
+        <View style={styles.replyComposer}>
+          <TextInput
+            value={editingBody}
+            onChangeText={setEditingBody}
+            placeholder="Update comment"
+            placeholderTextColor={colors.textSoft}
+            style={styles.replyInput}
           />
-        ))}
-      </View>
-    ) : null}
+          <Pressable
+            style={styles.replySubmit}
+            onPress={() => void onUpdateComment(comment.id, editingBody).then(() => setIsEditing(false))}
+          >
+            <Text style={styles.replySubmitLabel}>Save</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Text style={styles.commentBody}>{comment.body}</Text>
+      )}
+      <CommentReactionBar comment={comment} onReact={(payload) => onReact(comment.id, payload)} compact={nested} />
+      {!nested ? (
+        <Pressable
+          style={styles.replyButton}
+          onPress={() => setActiveReplyCommentId(activeReplyCommentId === comment.id ? null : comment.id)}
+        >
+          <Ionicons name="return-up-forward-outline" color={colors.primaryDark} size={14} />
+          <Text style={styles.replyButtonLabel}>Reply</Text>
+        </Pressable>
+      ) : null}
+      {!nested && activeReplyCommentId === comment.id ? (
+        <View style={styles.replyComposer}>
+          <TextInput
+            value={replyBody}
+            onChangeText={setReplyBody}
+            placeholder={`Reply to ${comment.author.firstName}`}
+            placeholderTextColor={colors.textSoft}
+            style={styles.replyInput}
+          />
+          <Pressable style={styles.replySubmit} onPress={() => void onReply(comment.id)} disabled={isReplyPending}>
+            <Text style={styles.replySubmitLabel}>{isReplyPending ? "Posting..." : "Reply"}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {replies.length ? (
+        <View style={styles.replyList}>
+          {replies.map((reply) => (
+            <CommentItem
+              key={reply.id}
+              comment={reply}
+              onReply={onReply}
+              onReact={onReact}
+              activeReplyCommentId={activeReplyCommentId}
+              replyBody={replyBody}
+              setReplyBody={setReplyBody}
+              setActiveReplyCommentId={setActiveReplyCommentId}
+              isReplyPending={isReplyPending}
+              onUpdateComment={onUpdateComment}
+              onDeleteComment={onDeleteComment}
+              nested
+            />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -225,6 +235,7 @@ export const PostCard = ({
   const [activeReplyCommentId, setActiveReplyCommentId] = useState<string | null>(null);
   const [isEditingPost, setIsEditingPost] = useState(false);
   const [editingBody, setEditingBody] = useState(post.body);
+  const commentList = post.comments ?? [];
 
   const invalidatePostQueries = async () => {
     await Promise.all([
@@ -369,10 +380,7 @@ export const PostCard = ({
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <ProfileIdentity
-          firstName={post.author.firstName ?? post.author.username}
-          username={post.author.username}
-        />
+        <ProfileIdentity firstName={post.author.firstName ?? post.author.username} username={post.author.username} />
         <View style={styles.headerActions}>
           <View style={styles.typeBadge}>
             <Text style={styles.typeBadgeLabel}>
@@ -425,12 +433,7 @@ export const PostCard = ({
         <Text style={styles.body}>{post.body}</Text>
       )}
       {post.mediaUrl && (post.mediaType === "IMAGE" || post.mediaType === "VIDEO") ? (
-        <MediaAttachmentPreview
-          autoPlay={post.mediaType === "VIDEO"}
-          height={280}
-          kind={post.mediaType}
-          uri={post.mediaUrl}
-        />
+        <MediaAttachmentPreview autoPlay={post.mediaType === "VIDEO"} height={280} kind={post.mediaType} uri={post.mediaUrl} />
       ) : null}
       {post.page ? (
         <Pressable onPress={() => router.push(`/page/${post.page?.slug}` as never)}>
@@ -461,11 +464,7 @@ export const PostCard = ({
           <Text style={styles.action}>Reply</Text>
         </Pressable>
         <Pressable onPress={() => saveMutation.mutate()} style={styles.actionButton}>
-          <Ionicons
-            name={post.isSaved ? "bookmark" : "bookmark-outline"}
-            color={colors.primaryDark}
-            size={16}
-          />
+          <Ionicons name={post.isSaved ? "bookmark" : "bookmark-outline"} color={colors.primaryDark} size={16} />
           <Text style={styles.action}>{post.isSaved ? "Saved" : "Save"}</Text>
         </Pressable>
         <Pressable onPress={() => shareMutation.mutate()} style={styles.actionButton}>
@@ -503,22 +502,18 @@ export const PostCard = ({
           disabled={commentMutation.isPending || isCommenting}
           style={styles.commentCta}
         >
-          <Text style={styles.commentAction}>
-            {commentMutation.isPending || isCommenting ? "Posting..." : "Post"}
-          </Text>
+          <Text style={styles.commentAction}>{commentMutation.isPending || isCommenting ? "Posting..." : "Post"}</Text>
         </Pressable>
       </View>
 
-      {post.comments?.length ? (
+      {commentList.length ? (
         <View style={styles.commentList}>
-          {post.comments.map((comment) => (
+          {commentList.map((comment) => (
             <CommentItem
               key={comment.id}
               comment={comment}
               onReply={handleReply}
-              onReact={(commentId, payload) =>
-                commentReactionMutation.mutate({ commentId, payload })
-              }
+              onReact={(commentId, payload) => commentReactionMutation.mutate({ commentId, payload })}
               activeReplyCommentId={activeReplyCommentId}
               replyBody={replyBody}
               setReplyBody={setReplyBody}

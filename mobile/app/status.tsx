@@ -12,6 +12,8 @@ import { statusService } from "@/services/status";
 import { useAuthStore } from "@/store/auth-store";
 import { colors, radius, spacing } from "@/utils/theme";
 
+const QUICK_REACTIONS = ["\u{1F525}", "\u{1F44F}", "\u{2764}\u{FE0F}"];
+
 export default function StatusScreen() {
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((state) => state.user?.id);
@@ -131,72 +133,77 @@ export default function StatusScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.list}>
-        {statuses.map((status) => (
-          <View key={status.id} style={styles.card}>
-            <View style={styles.identity}>
-              <Pressable onPress={() => router.push(`/profile/${status.author.username}`)}>
-                <Avatar name={status.author.firstName ?? status.author.username} />
-              </Pressable>
-              <View style={styles.identityText}>
+        {statuses.map((status) => {
+          const reactions = status.reactions ?? [];
+          const viewers = status.viewers ?? [];
+
+          return (
+            <View key={status.id} style={styles.card}>
+              <View style={styles.identity}>
                 <Pressable onPress={() => router.push(`/profile/${status.author.username}`)}>
-                  <Text style={styles.cardTitle}>{status.author.firstName ?? status.author.username}</Text>
+                  <Avatar name={status.author.firstName ?? status.author.username} />
                 </Pressable>
-                <Text style={styles.cardMeta}>
-                  {status.visibility} • {status.viewersCount ?? 0} viewers
-                </Text>
+                <View style={styles.identityText}>
+                  <Pressable onPress={() => router.push(`/profile/${status.author.username}`)}>
+                    <Text style={styles.cardTitle}>{status.author.firstName ?? status.author.username}</Text>
+                  </Pressable>
+                  <Text style={styles.cardMeta}>
+                    {status.visibility} {"\u2022"} {status.viewersCount ?? 0} viewers
+                  </Text>
+                </View>
               </View>
-            </View>
-            <Text style={styles.body}>{status.text ?? status.mediaUrl ?? "Status update"}</Text>
-            <View style={styles.row}>
-              {["🔥", "👏", "❤️"].map((emoji) => (
-                <Pressable
-                  key={`${status.id}-${emoji}`}
-                  style={styles.reactionChip}
-                  onPress={() => reactMutation.mutate({ statusId: status.id, emoji })}
-                >
-                  <Text>{emoji}</Text>
-                </Pressable>
-              ))}
-            </View>
-            {status.reactions?.length ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Recent reactions</Text>
-                {status.reactions.slice(0, 4).map((reaction) => (
+              <Text style={styles.body}>{status.text ?? status.mediaUrl ?? "Status update"}</Text>
+              <View style={styles.row}>
+                {QUICK_REACTIONS.map((emoji) => (
                   <Pressable
-                    key={reaction.id}
-                    style={styles.metaCard}
-                    onPress={() => router.push(`/profile/${reaction.user.username}`)}
+                    key={`${status.id}-${emoji}`}
+                    style={styles.reactionChip}
+                    onPress={() => reactMutation.mutate({ statusId: status.id, emoji })}
                   >
-                    <Text style={styles.metaTitle}>
-                      {reaction.emoji} @{reaction.user.username}
-                    </Text>
-                    {reaction.replyText ? <Text style={styles.metaBody}>{reaction.replyText}</Text> : null}
+                    <Text>{emoji}</Text>
                   </Pressable>
                 ))}
               </View>
-            ) : null}
-            {status.author.id === currentUserId && status.viewers?.length ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Viewed by</Text>
-                {status.viewers.slice(0, 5).map((view) => (
-                  <Pressable
-                    key={view.id}
-                    style={styles.metaCard}
-                    onPress={() => router.push(`/profile/${view.viewer.username}`)}
-                  >
-                    <Text style={styles.metaTitle}>{view.viewer.firstName ?? view.viewer.username}</Text>
-                    <Text style={styles.metaBody}>{new Date(view.viewedAt).toLocaleString()}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-            {status.author.id === currentUserId ? (
-              <Pressable style={styles.deleteButton} onPress={() => deleteMutation.mutate(status.id)}>
-                <Text style={styles.deleteLabel}>{deleteMutation.isPending ? "Deleting..." : "Delete status"}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ))}
+              {reactions.length ? (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Recent reactions</Text>
+                  {reactions.slice(0, 4).map((reaction) => (
+                    <Pressable
+                      key={reaction.id}
+                      style={styles.metaCard}
+                      onPress={() => router.push(`/profile/${reaction.user.username}`)}
+                    >
+                      <Text style={styles.metaTitle}>
+                        {reaction.emoji} @{reaction.user.username}
+                      </Text>
+                      {reaction.replyText ? <Text style={styles.metaBody}>{reaction.replyText}</Text> : null}
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+              {status.author.id === currentUserId && viewers.length ? (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Viewed by</Text>
+                  {viewers.slice(0, 5).map((view) => (
+                    <Pressable
+                      key={view.id}
+                      style={styles.metaCard}
+                      onPress={() => router.push(`/profile/${view.viewer.username}`)}
+                    >
+                      <Text style={styles.metaTitle}>{view.viewer.firstName ?? view.viewer.username}</Text>
+                      <Text style={styles.metaBody}>{new Date(view.viewedAt).toLocaleString()}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+              {status.author.id === currentUserId ? (
+                <Pressable style={styles.deleteButton} onPress={() => deleteMutation.mutate(status.id)}>
+                  <Text style={styles.deleteLabel}>{deleteMutation.isPending ? "Deleting..." : "Delete status"}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          );
+        })}
       </ScrollView>
     </Screen>
   );

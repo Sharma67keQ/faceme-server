@@ -30,10 +30,13 @@ export const ChatListItem = ({ conversation, currentUserId, onPress }: ChatListI
     conversation.type === "DIRECT" ? peer?.presenceStatus : `${participantCount} members`;
   const badgeLabel =
     conversation.type === "COMMUNITY" ? "COMMUNITY" : conversation.type === "GROUP" ? "GROUP" : "DIRECT";
-  const timestamp = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(conversation.lastMessageAt ?? conversation.updatedAt));
+  const lastActivity = new Date(conversation.lastMessageAt ?? conversation.updatedAt);
+  const timestamp = Number.isNaN(lastActivity.getTime())
+    ? "Now"
+    : new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+      }).format(lastActivity);
 
   return (
     <Pressable style={styles.card} onPress={onPress}>

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useState } from "react";
-import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -67,7 +67,10 @@ export default function VoiceRoomsScreen() {
         <View style={styles.themeRow}>
           {roomThemes.map((item) => (
             <Pressable key={item.key} onPress={() => setTheme(item.key)} style={styles.themeOption}>
-              <LinearGradient colors={item.colors} style={[styles.themeSwatch, theme === item.key ? styles.themeSwatchActive : null]} />
+              <LinearGradient
+                colors={item.colors}
+                style={[styles.themeSwatch, theme === item.key ? styles.themeSwatchActive : null]}
+              />
               <Text style={[styles.themeLabel, theme === item.key ? styles.themeLabelActive : null]}>{item.label}</Text>
             </Pressable>
           ))}
@@ -100,12 +103,15 @@ export default function VoiceRoomsScreen() {
       <ScrollView contentContainerStyle={styles.list}>
         {rooms.map((room) => (
           <Pressable key={room.id} style={styles.roomCard} onPress={() => router.push(`/voice-room/${room.id}` as never)}>
-            <LinearGradient colors={roomThemes.find((item) => item.key === room.theme)?.colors ?? ["#FFB36B", "#EF6F5E"]} style={styles.roomHero}>
+            <LinearGradient
+              colors={roomThemes.find((item) => item.key === room.theme)?.colors ?? ["#FFB36B", "#EF6F5E"]}
+              style={styles.roomHero}
+            >
               <View style={styles.roomHeader}>
                 <View style={styles.roomHeaderCopy}>
                   <Text style={styles.roomTitle}>{room.title}</Text>
                   <Text style={styles.roomMeta}>
-                    {room.privacy} • {room.status}
+                    {room.privacy} {"\u2022"} {room.status}
                   </Text>
                 </View>
                 <View style={[styles.liveBadge, room.status === "ENDED" ? styles.endedBadge : null]}>
@@ -220,7 +226,6 @@ const styles = StyleSheet.create({
   liveBadgeLabel: { color: colors.accent, fontWeight: "800" },
   endedBadge: { backgroundColor: colors.surfaceMuted },
   endedBadgeLabel: { color: colors.textMuted },
-  roomBody: { color: colors.textMuted, lineHeight: 20 },
   roomBodyLight: { color: "#FFF8F1", lineHeight: 20 },
   hostRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   hostCopy: { gap: 2 },

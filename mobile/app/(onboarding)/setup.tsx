@@ -23,6 +23,9 @@ export default function OnboardingSetupScreen() {
     queryKey: ["launch-summary"],
     queryFn: socialService.getLaunchSummary,
   });
+  const suggestedUsers = launch?.onboarding?.suggestedUsers ?? [];
+  const suggestedPages = launch?.onboarding?.suggestedPages ?? [];
+  const suggestedGroups = launch?.onboarding?.suggestedGroups ?? [];
 
   const followPageMutation = useMutation({
     mutationFn: (pageId: string) => socialService.togglePageFollow(pageId),
@@ -53,10 +56,7 @@ export default function OnboardingSetupScreen() {
         isOnboardingComplete: true,
       }),
     onSuccess: async (nextUser) => {
-      setUser({
-        ...user,
-        ...nextUser,
-      });
+      setUser(nextUser);
       await queryClient.invalidateQueries({ queryKey: ["feed"] });
       router.replace("/(tabs)");
     },
@@ -78,11 +78,11 @@ export default function OnboardingSetupScreen() {
         <Input label="Location" value={location} onChangeText={setLocation} placeholder="Johannesburg" />
       </View>
 
-      {launch?.onboarding?.suggestedUsers?.length ? (
+      {suggestedUsers.length ? (
         <>
           <Text style={styles.sectionTitle}>People you may know</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-            {launch.onboarding.suggestedUsers.map((person) => (
+            {suggestedUsers.map((person) => (
               <View key={person.id} style={styles.card}>
                 <Avatar name={person.firstName ?? person.username} />
                 <Text style={styles.cardTitle}>{person.firstName ?? person.username}</Text>
@@ -97,11 +97,11 @@ export default function OnboardingSetupScreen() {
         </>
       ) : null}
 
-      {launch?.onboarding?.suggestedPages?.length ? (
+      {suggestedPages.length ? (
         <>
           <Text style={styles.sectionTitle}>Suggested pages</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-            {launch.onboarding.suggestedPages.map((page) => (
+            {suggestedPages.map((page) => (
               <View key={page.id} style={styles.cardWide}>
                 <Text style={styles.cardTitle}>{page.name}</Text>
                 <Text style={styles.cardMeta}>{page.followersCount} followers</Text>
@@ -117,11 +117,11 @@ export default function OnboardingSetupScreen() {
         </>
       ) : null}
 
-      {launch?.onboarding?.suggestedGroups?.length ? (
+      {suggestedGroups.length ? (
         <>
           <Text style={styles.sectionTitle}>Suggested groups</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-            {launch.onboarding.suggestedGroups.map((group) => (
+            {suggestedGroups.map((group) => (
               <View key={group.id} style={styles.cardWide}>
                 <Text style={styles.cardTitle}>{group.name}</Text>
                 <Text style={styles.cardMeta}>{group.membersCount} members</Text>

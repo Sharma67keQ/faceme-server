@@ -1,0 +1,17 @@
+node_modules
+.expo
+.git
+dist
+build
+coverage
+android
+ios
+android/.gradle
+android/app/build
+android/build
+ios/build
+*.log
+*.tmp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

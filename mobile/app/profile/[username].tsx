@@ -11,20 +11,22 @@ import { userService } from "@/services/users";
 import { colors, radius, spacing } from "@/utils/theme";
 
 export default function PublicProfileScreen() {
-  const { username } = useLocalSearchParams<{ username: string }>();
+  const params = useLocalSearchParams<{ username: string | string[] }>();
+  const username = Array.isArray(params.username) ? params.username[0] : params.username;
   const queryClient = useQueryClient();
   const { data: user, isLoading, isError, refetch } = useQuery({
     queryKey: ["public-profile", username],
-    queryFn: () => userService.getUserByUsername(username),
+    queryFn: () => (username ? userService.getUserByUsername(username) : Promise.resolve(null)),
+    enabled: Boolean(username),
   });
   const { data: posts = [] } = useQuery({
     queryKey: ["public-profile-posts", username],
-    queryFn: () => userService.getUserPostsByUsername(username),
+    queryFn: () => (username ? userService.getUserPostsByUsername(username) : Promise.resolve([])),
     enabled: Boolean(user?.canViewPosts),
   });
   const { data: relationship } = useQuery({
     queryKey: ["relationship", user?.id],
-    queryFn: () => socialService.getRelationship(user!.id),
+    queryFn: () => (user?.id ? socialService.getRelationship(user.id) : Promise.resolve(null)),
     enabled: Boolean(user?.id),
   });
   const followMutation = useMutation({
@@ -69,6 +71,10 @@ export default function PublicProfileScreen() {
   });
 
   const openConnections = (type: "followers" | "following") => {
+    if (!username) {
+      return;
+    }
+
     router.push(`/profile/${username}/connections?type=${type}` as never);
   };
 
@@ -84,7 +90,7 @@ export default function PublicProfileScreen() {
         <>
           <View style={styles.hero}>
             <Avatar name={user.firstName ?? user.username} size={72} />
-            <Text style={styles.name}>{user.firstName}</Text>
+            <Text style={styles.name}>{user.firstName ?? user.username}</Text>
             <Text style={styles.username}>@{user.username}</Text>
             {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
           </View>
