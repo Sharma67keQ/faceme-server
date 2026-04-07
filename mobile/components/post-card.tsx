@@ -21,20 +21,49 @@ type PostCardProps = {
 
 const QUICK_EMOJIS = ["\u{1F525}", "\u{1F44F}", "\u{1F602}"];
 
+const formatRelativeTime = (value: string) => {
+  const date = new Date(value);
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours < 24) {
+    return `${diffHours}h`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays < 7) {
+    return `${diffDays}d`;
+  }
+
+  return date.toLocaleDateString();
+};
+
 const ProfileIdentity = ({
   firstName,
   username,
+  createdAt,
   avatarSize = 44,
 }: {
   firstName: string;
   username: string;
+  createdAt?: string;
   avatarSize?: number;
 }) => (
   <Pressable style={styles.identity} onPress={() => router.push(`/profile/${username}`)}>
     <Avatar name={firstName || username} size={avatarSize} />
     <View style={styles.identityMeta}>
       <Text style={styles.name}>{firstName}</Text>
-      <Text style={styles.username}>@{username}</Text>
+      <Text style={styles.username}>
+        @{username}
+        {createdAt ? ` · ${formatRelativeTime(createdAt)}` : ""}
+      </Text>
     </View>
   </Pressable>
 );
@@ -135,6 +164,7 @@ const CommentItem = ({
         <ProfileIdentity
           firstName={comment.author.firstName ?? comment.author.username}
           username={comment.author.username}
+          createdAt={comment.createdAt}
           avatarSize={nested ? 30 : 36}
         />
         <View style={styles.commentHeaderActions}>
@@ -380,23 +410,14 @@ export const PostCard = ({
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <ProfileIdentity firstName={post.author.firstName ?? post.author.username} username={post.author.username} />
+        <ProfileIdentity
+          firstName={post.author.firstName ?? post.author.username}
+          username={post.author.username}
+          createdAt={post.createdAt}
+        />
         <View style={styles.headerActions}>
-          <View style={styles.typeBadge}>
-            <Text style={styles.typeBadgeLabel}>
-              {post.kind === "QUICK"
-                ? "Quick post"
-                : post.sharedPost
-                  ? "Shared post"
-                  : post.page
-                    ? "Page post"
-                    : post.group
-                      ? "Group post"
-                      : "Network post"}
-            </Text>
-          </View>
           <Pressable onPress={() => router.push(`/profile/${post.author.username}`)}>
-            <Text style={styles.viewProfile}>View Profile</Text>
+            <Ionicons name="ellipsis-horizontal" color={colors.textSoft} size={18} />
           </Pressable>
           {post.canEdit && currentUser?.id === post.author.id ? (
             <View style={styles.ownerActions}>
@@ -456,27 +477,17 @@ export const PostCard = ({
 
       <View style={styles.actions}>
         <Pressable onPress={() => likeMutation.mutate()} style={styles.actionButton}>
-          <Ionicons name="heart-outline" color={colors.primaryDark} size={16} />
-          <Text style={styles.action}>React</Text>
+          <Ionicons name="thumbs-up-outline" color={colors.textMuted} size={18} />
+          <Text style={styles.action}>Like</Text>
         </Pressable>
-        <Pressable style={styles.actionButton}>
-          <Ionicons name="chatbox-ellipses-outline" color={colors.primaryDark} size={16} />
-          <Text style={styles.action}>Reply</Text>
-        </Pressable>
-        <Pressable onPress={() => saveMutation.mutate()} style={styles.actionButton}>
-          <Ionicons name={post.isSaved ? "bookmark" : "bookmark-outline"} color={colors.primaryDark} size={16} />
-          <Text style={styles.action}>{post.isSaved ? "Saved" : "Save"}</Text>
+        <Pressable style={styles.actionButton} onPress={() => {}}>
+          <Ionicons name="chatbubble-outline" color={colors.textMuted} size={18} />
+          <Text style={styles.action}>Comment</Text>
         </Pressable>
         <Pressable onPress={() => shareMutation.mutate()} style={styles.actionButton}>
-          <Ionicons name="repeat-outline" color={colors.primaryDark} size={16} />
+          <Ionicons name="arrow-redo-outline" color={colors.textMuted} size={18} />
           <Text style={styles.action}>Share</Text>
         </Pressable>
-        {post.shareSlug ? (
-          <Pressable onPress={() => router.push(`/post/${post.shareSlug}` as never)} style={styles.actionButton}>
-            <Ionicons name="link-outline" color={colors.primaryDark} size={16} />
-            <Text style={styles.action}>Open</Text>
-          </Pressable>
-        ) : null}
       </View>
 
       {post.sharedPost ? (
@@ -563,25 +574,11 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     alignItems: "flex-end",
-    gap: spacing.xs,
+    gap: spacing.xxs,
   },
   ownerActions: {
     alignItems: "flex-end",
     gap: spacing.xxs,
-  },
-  typeBadge: {
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-  },
-  typeBadgeLabel: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
   },
   viewProfile: {
     color: colors.primaryDark,
@@ -627,21 +624,23 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "space-around",
     borderTopColor: colors.border,
     borderTopWidth: 1,
     borderBottomColor: colors.border,
     borderBottomWidth: 1,
-    paddingVertical: spacing.sm,
+    paddingVertical: 10,
     gap: spacing.sm,
   },
   actionButton: {
     alignItems: "center",
     flexDirection: "row",
     gap: spacing.xs,
+    flex: 1,
+    justifyContent: "center",
   },
   action: {
-    color: colors.primaryDark,
+    color: colors.textMuted,
     fontWeight: "700",
     fontSize: 13,
   },

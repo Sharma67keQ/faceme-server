@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { type ComponentType, useCallback, useEffect, useRef, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View, ViewToken } from "react-native";
 import { MediaAttachmentPreview } from "@/components/media-attachment-preview";
+import { ScreenState } from "@/components/screen-state";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,9 +27,10 @@ export default function ReelsScreen() {
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [activeReelId, setActiveReelId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [screenError, setScreenError] = useState<string | null>(null);
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 });
 
-  const { data: reels = [] } = useQuery({
+  const { data: reels = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["reels"],
     queryFn: reelService.list,
   });
@@ -44,7 +46,12 @@ export default function ReelsScreen() {
 
   const createMutation = useMutation({
     mutationFn: () => reelService.create({ videoUrl: videoAttachment!.remoteUrl, caption: caption.trim() || undefined }),
+    onError: (error) => {
+      console.error("Failed to create reel", error);
+      setScreenError("Could not publish this reel.");
+    },
     onSuccess: async () => {
+      setScreenError(null);
       setVideoAttachment(null);
       setCaption("");
       await queryClient.invalidateQueries({ queryKey: ["reels"] });
@@ -53,6 +60,10 @@ export default function ReelsScreen() {
 
   const likeMutation = useMutation({
     mutationFn: (reelId: string) => reelService.like(reelId),
+    onError: (error) => {
+      console.error("Failed to like reel", error);
+      setScreenError("Could not update reel reaction.");
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["reels"] });
     },
@@ -60,6 +71,10 @@ export default function ReelsScreen() {
 
   const followMutation = useMutation({
     mutationFn: (userId: string) => userService.toggleFollow(userId),
+    onError: (error) => {
+      console.error("Failed to follow reel creator", error);
+      setScreenError("Could not update follow state.");
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["reels"] });
       await queryClient.invalidateQueries({ queryKey: ["public-profile"] });
@@ -68,7 +83,12 @@ export default function ReelsScreen() {
 
   const commentMutation = useMutation({
     mutationFn: ({ reelId, body }: { reelId: string; body: string }) => reelService.comment(reelId, body),
+    onError: (error) => {
+      console.error("Failed to comment on reel", error);
+      setScreenError("Could not post reel comment.");
+    },
     onSuccess: async (_, variables) => {
+      setScreenError(null);
       setCommentDrafts((current) => ({ ...current, [variables.reelId]: "" }));
       await queryClient.invalidateQueries({ queryKey: ["reels"] });
     },
@@ -76,10 +96,18 @@ export default function ReelsScreen() {
 
   const shareMutation = useMutation({
     mutationFn: (reelId: string) => reelService.share(reelId),
+    onError: (error) => {
+      console.error("Failed to share reel", error);
+      setScreenError("Could not prepare reel share link.");
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (reelId: string) => reelService.delete(reelId),
+    onError: (error) => {
+      console.error("Failed to delete reel", error);
+      setScreenError("Could not delete this reel.");
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["reels"] });
     },
@@ -95,6 +123,7 @@ export default function ReelsScreen() {
   const handlePickReel = async () => {
     try {
       setIsUploading(true);
+      setScreenError(null);
       const asset = await mediaService.pickFromLibrary("video");
 
       if (!asset) {
@@ -103,14 +132,44 @@ export default function ReelsScreen() {
 
       const uploaded = await mediaService.uploadAsset(asset, "video");
       setVideoAttachment({ localUri: asset.uri, remoteUrl: uploaded.secureUrl });
+    } catch (error) {
+      console.error("Failed to pick reel", error);
+      setScreenError("Could not load the reel video.");
     } finally {
       setIsUploading(false);
     }
   };
 
+  if (isLoading && !reels.length) {
+    return (
+      <Screen>
+        <ScreenState
+          variant="loading"
+          title="Loading reels"
+          message="Short videos are being prepared."
+        />
+      </Screen>
+    );
+  }
+
+  if (isError && !reels.length) {
+    return (
+      <Screen>
+        <ScreenState
+          variant="error"
+          title="Could not load reels"
+          message="Reels are temporarily unavailable."
+          actionLabel="Retry"
+          onAction={() => void refetch()}
+        />
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <Text style={styles.title}>Reels</Text>
+      {screenError ? <Text style={styles.errorText}>{screenError}</Text> : null}
       <View style={styles.composeCard}>
         <Input label="Caption" value={caption} onChangeText={setCaption} multiline />
         <Pressable style={styles.uploadButton} onPress={() => void handlePickReel()}>
@@ -391,4 +450,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   uploadButtonLabel: { color: colors.primaryDark, fontWeight: "700" },
+  errorText: { color: colors.danger, lineHeight: 20 },
 });

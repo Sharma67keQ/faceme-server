@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Screen } from "@/components/ui/screen";
 import { api } from "@/services/api";
+import { useI18n } from "@/services/i18n";
 import { useAuthStore } from "@/store/auth-store";
 import { User } from "@/types/domain";
 import { colors, spacing } from "@/utils/theme";
@@ -12,6 +13,7 @@ import { colors, spacing } from "@/utils/theme";
 export default function EditProfileScreen() {
   const currentUser = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
+  const { t } = useI18n();
   const [firstName, setFirstName] = useState(currentUser?.firstName ?? "");
   const [lastName, setLastName] = useState(currentUser?.lastName ?? "");
   const [bio, setBio] = useState(currentUser?.bio ?? "");
@@ -51,13 +53,13 @@ export default function EditProfileScreen() {
     <Screen scroll>
       <View style={styles.header}>
         <Text style={styles.title}>Edit profile</Text>
-        <Text style={styles.subtitle}>Finish your V1 profile so feed, chat, and notifications have the right identity data.</Text>
+        <Text style={styles.subtitle}>{t("auth.registerSubtitle")}</Text>
       </View>
-      <Input label="First name" value={firstName} onChangeText={setFirstName} />
+      <Input label={t("auth.firstName")} value={firstName} onChangeText={setFirstName} />
       <Input label="Last name" value={lastName} onChangeText={setLastName} />
       <Input label="Bio" value={bio} onChangeText={setBio} multiline />
-      <Input label="Location" value={location} onChangeText={setLocation} placeholder="Johannesburg" />
-      <Input label="Website" value={website} onChangeText={setWebsite} placeholder="https://example.com" />
+      <Input label={t("profile.location")} value={location} onChangeText={setLocation} placeholder="Johannesburg" />
+      <Input label={t("profile.website")} value={website} onChangeText={setWebsite} placeholder="https://example.com" />
       <Input label="Avatar URL" value={avatarUrl} onChangeText={setAvatarUrl} placeholder="https://..." />
       <Input
         label="Cover image URL"
@@ -66,7 +68,7 @@ export default function EditProfileScreen() {
         placeholder="https://..."
       />
       <View style={styles.visibilitySection}>
-        <Text style={styles.visibilityLabel}>Profile visibility</Text>
+        <Text style={styles.visibilityLabel}>{t("profile.privacy")}</Text>
         <View style={styles.accountRow}>
           {(["PUBLIC", "FOLLOWERS", "FRIENDS"] as const).map((value) => (
             <Pressable
@@ -99,7 +101,7 @@ export default function EditProfileScreen() {
           </Pressable>
         ))}
       </View>
-      <Button label="Save profile" onPress={handleSave} />
+      <Button label={t("common.save")} onPress={handleSave} />
     </Screen>
   );
 }

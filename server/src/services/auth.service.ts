@@ -33,6 +33,7 @@ const publicUserSelect = {
   coverImageUrl: true,
   isOnboardingComplete: true,
   accountType: true,
+  preferredLanguage: true,
   profileVisibility: true,
   role: true,
   suspendedAt: true,
@@ -72,6 +73,9 @@ export const authService = {
         passwordHash,
         firstName: input.firstName,
         lastName: input.lastName,
+        wallet: {
+          create: {},
+        },
       },
       select: publicUserSelect,
     });

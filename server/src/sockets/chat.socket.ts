@@ -84,6 +84,14 @@ export const registerChatSocket = (io: Server) => {
       });
     });
 
+    socket.on("voice-room:join", (roomId: string) => {
+      socket.join(`voice-room:${roomId}`);
+    });
+
+    socket.on("voice-room:leave", (roomId: string) => {
+      socket.leave(`voice-room:${roomId}`);
+    });
+
     socket.on(
       "message:send",
       async (payload: {

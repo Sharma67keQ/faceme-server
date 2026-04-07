@@ -17,4 +17,6 @@ voiceRoomRouter.post("/:roomId/participants/:userId/role", asyncHandler(voiceRoo
 voiceRoomRouter.post("/:roomId/participants/:userId/moderation", asyncHandler(voiceRoomController.setParticipantModeration));
 voiceRoomRouter.delete("/:roomId/participants/:userId", asyncHandler(voiceRoomController.removeParticipant));
 voiceRoomRouter.post("/:roomId/audio-token", asyncHandler(voiceRoomController.issueAudioToken));
+voiceRoomRouter.get("/:roomId/gifts", asyncHandler(voiceRoomController.giftSnapshot));
+voiceRoomRouter.post("/:roomId/gifts", asyncHandler(voiceRoomController.sendGift));
 voiceRoomRouter.post("/:roomId/end", asyncHandler(voiceRoomController.endRoom));

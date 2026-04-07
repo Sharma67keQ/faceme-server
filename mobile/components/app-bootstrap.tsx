@@ -1,13 +1,18 @@
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { useI18n } from "@/services/i18n";
 import { colors, spacing } from "@/utils/theme";
 
-export const AppBootstrap = () => (
-  <View style={styles.container}>
-    <ActivityIndicator color={colors.primaryDark} size="large" />
-    <Text style={styles.title}>Loading Faceme</Text>
-    <Text style={styles.body}>Restoring your session and preparing the app.</Text>
-  </View>
-);
+export const AppBootstrap = () => {
+  const { t } = useI18n();
+
+  return (
+    <View style={styles.container}>
+      <ActivityIndicator color={colors.primaryDark} size="large" />
+      <Text style={styles.title}>{t("appBootstrap.title")}</Text>
+      <Text style={styles.body}>{t("appBootstrap.body")}</Text>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {

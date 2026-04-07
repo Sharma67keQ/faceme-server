@@ -12,6 +12,7 @@ const updateProfileSchema = z.object({
   location: z.string().max(80).nullable().optional(),
   website: z.string().url().nullable().optional(),
   accountType: z.enum(["PERSONAL", "CREATOR", "BUSINESS"]).optional(),
+  preferredLanguage: z.enum(["SO", "EN", "AR"]).optional(),
   profileVisibility: z.enum(["PUBLIC", "FOLLOWERS", "FRIENDS"]).optional(),
   isOnboardingComplete: z.boolean().optional(),
 });

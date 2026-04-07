@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma.js";
+import { emitRealtime, emitRealtimeToUser } from "../lib/realtime.js";
 import { moderationService } from "./moderation.service.js";
 import { ApiError } from "../utils/api-error.js";
 import { StatusCodes } from "http-status-codes";
@@ -109,7 +110,7 @@ export const statusService = {
       visibility?: "PUBLIC" | "FOLLOWERS" | "FRIENDS";
     },
   ) {
-    return prisma.status.create({
+    const status = await prisma.status.create({
       data: {
         authorId: userId,
         kind: payload.kind,
@@ -124,6 +125,9 @@ export const statusService = {
         },
       },
     });
+
+    emitRealtime("status:changed", { reason: "status_created", statusId: status.id, authorId: userId });
+    return status;
   },
 
   async markViewed(userId: string, statusId: string) {
@@ -142,7 +146,7 @@ export const statusService = {
       throw new Error("Forbidden");
     }
 
-    return prisma.statusView.upsert({
+    const view = await prisma.statusView.upsert({
       where: {
         statusId_viewerId: {
           statusId,
@@ -155,6 +159,9 @@ export const statusService = {
         viewerId: userId,
       },
     });
+
+    emitRealtimeToUser(status.authorId, "status:changed", { reason: "status_viewed", statusId, viewerId: userId });
+    return view;
   },
 
   async react(userId: string, statusId: string, payload: { emoji: string; replyText?: string }) {
@@ -193,8 +200,10 @@ export const statusService = {
           entityId: statusId,
         },
       });
+      emitRealtimeToUser(status.authorId, "notifications:changed", { reason: "status_replied", entityId: statusId });
     }
 
+    emitRealtime("status:changed", { reason: "status_reacted", statusId, actorId: userId });
     return reaction;
   },
 
@@ -270,6 +279,7 @@ export const statusService = {
       where: { id: statusId },
     });
 
+    emitRealtime("status:changed", { reason: "status_deleted", statusId, authorId: userId });
     return { deleted: true };
   },
 

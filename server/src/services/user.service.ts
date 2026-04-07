@@ -15,6 +15,7 @@ const privateProfileSelect = {
   website: true,
   isOnboardingComplete: true,
   accountType: true,
+  preferredLanguage: true,
   isPrivateAccount: true,
   profileVisibility: true,
   role: true,
@@ -41,6 +42,7 @@ const publicProfileSelect = (viewerId: string) =>
     location: true,
     website: true,
     accountType: true,
+    preferredLanguage: true,
     isPrivateAccount: true,
     profileVisibility: true,
     role: true,
@@ -73,6 +75,7 @@ const userListSelect = (viewerId: string) =>
     avatarUrl: true,
     bio: true,
     accountType: true,
+    preferredLanguage: true,
     profileVisibility: true,
     role: true,
     _count: {
@@ -419,7 +422,7 @@ export const userService = {
     userId: string,
     data: Record<
       string,
-      string | boolean | null | undefined | "PUBLIC" | "FOLLOWERS" | "FRIENDS"
+      string | boolean | null | undefined | "PUBLIC" | "FOLLOWERS" | "FRIENDS" | "SO" | "EN" | "AR"
     >,
   ) {
     return prisma.user.update({

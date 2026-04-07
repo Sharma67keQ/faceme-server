@@ -91,8 +91,14 @@ android {
         applicationId 'com.xdtech.faceme'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        versionCode 4
         versionName "0.1.0"
+        externalNativeBuild {
+            cmake {
+                // Silence clang warnings emitted by React Native codegen in some third-party modules.
+                cppFlags "-Wno-dollar-in-identifier-extension"
+            }
+        }
     }
     signingConfigs {
         debug {

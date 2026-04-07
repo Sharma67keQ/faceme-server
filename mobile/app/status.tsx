@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Screen } from "@/components/ui/screen";
+import { useI18n } from "@/services/i18n";
 import { mediaService } from "@/services/media";
 import { statusService } from "@/services/status";
 import { useAuthStore } from "@/store/auth-store";
@@ -16,6 +17,7 @@ const QUICK_REACTIONS = ["\u{1F525}", "\u{1F44F}", "\u{2764}\u{FE0F}"];
 
 export default function StatusScreen() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const currentUserId = useAuthStore((state) => state.user?.id);
   const [text, setText] = useState("");
   const [mediaAttachment, setMediaAttachment] = useState<{ localUri: string; remoteUrl: string } | null>(null);
@@ -79,7 +81,7 @@ export default function StatusScreen() {
 
   return (
     <Screen scroll>
-      <Text style={styles.title}>24-hour status</Text>
+      <Text style={styles.title}>{t("status.title")}</Text>
       <View style={styles.composeCard}>
         <View style={styles.row}>
           {(["TEXT", "IMAGE", "VIDEO"] as const).map((value) => (
@@ -104,7 +106,7 @@ export default function StatusScreen() {
           ))}
         </View>
         {kind === "TEXT" ? (
-          <Input label="Text status" value={text} onChangeText={setText} multiline />
+          <Input label={t("status.textStatus")} value={text} onChangeText={setText} multiline />
         ) : (
           <>
             <View style={styles.row}>
@@ -120,13 +122,13 @@ export default function StatusScreen() {
           </>
         )}
         <Input
-          label="Optional reaction reply"
+          label={t("status.optionalReply")}
           value={replyText}
           onChangeText={setReplyText}
           placeholder="Add text when reacting to someone's status"
         />
         <Button
-          label={createMutation.isPending ? "Publishing..." : "Publish status"}
+          label={createMutation.isPending ? t("status.publishing") : t("status.publish")}
           onPress={() => createMutation.mutate()}
           disabled={createMutation.isPending || isUploading || (kind !== "TEXT" && !mediaAttachment?.remoteUrl)}
         />

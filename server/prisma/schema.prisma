@@ -19,6 +19,12 @@ enum AccountType {
   BUSINESS
 }
 
+enum AppLanguage {
+  SO
+  EN
+  AR
+}
+
 enum PresenceStatus {
   ONLINE
   OFFLINE
@@ -146,6 +152,8 @@ enum NotificationType {
   VOICE_ROOM_ACTIVITY
   MESSAGE_RECEIVED
   STORY_REACTION
+  GIFT_RECEIVED
+  PREMIUM_UPDATED
   SYSTEM
 }
 
@@ -196,6 +204,78 @@ enum MembershipStatus {
   REMOVED
 }
 
+enum WalletTransactionType {
+  TOP_UP
+  GIFT_SPEND
+  GIFT_RECEIPT
+  ADJUSTMENT
+  REFUND
+  HOLD
+  RELEASE
+}
+
+enum WalletTransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum PaymentProvider {
+  MANUAL_REVIEW
+  CARD
+  MOBILE_MONEY
+  APP_STORE
+}
+
+enum PaymentIntentStatus {
+  PENDING
+  REQUIRES_ACTION
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum PaymentIntentPurpose {
+  WALLET_TOP_UP
+  PREMIUM_SUBSCRIPTION
+}
+
+enum CreatorPayoutEligibilityStatus {
+  INELIGIBLE
+  REVIEW
+  ELIGIBLE
+  RESTRICTED
+}
+
+enum CreatorLedgerStatus {
+  PENDING
+  AVAILABLE
+  HELD
+  SETTLED
+  REVERSED
+}
+
+enum PremiumSubscriptionStatus {
+  INACTIVE
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum PremiumPlanInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum AdPlacementType {
+  FEED
+  REELS
+  ROOM_DISCOVERY
+}
+
 model User {
   id                    String                    @id @default(cuid())
   email                 String                    @unique
@@ -210,12 +290,19 @@ model User {
   website               String?
   role                  UserRole                  @default(USER)
   accountType           AccountType               @default(PERSONAL)
+  preferredLanguage     AppLanguage               @default(SO)
   presenceStatus        PresenceStatus            @default(OFFLINE)
   isOnboardingComplete  Boolean                   @default(false)
   isVerified            Boolean                   @default(false)
   isPrivateAccount      Boolean                   @default(false)
   profileVisibility     ProfileVisibility         @default(PUBLIC)
   premiumUntil          DateTime?
+  premiumBadgeVisible   Boolean                   @default(false)
+  monetizationSuspendedAt DateTime?
+  monetizationSuspensionReason String?            @db.VarChar(500)
+  payoutEligibilityStatus CreatorPayoutEligibilityStatus @default(INELIGIBLE)
+  payoutEligibilityReviewedAt DateTime?
+  payoutEligibilityReason String?                 @db.VarChar(500)
   suspendedAt           DateTime?
   suspensionReason      String?                   @db.VarChar(500)
   bannedAt              DateTime?
@@ -266,6 +353,13 @@ model User {
   voiceParticipations   VoiceParticipant[]
   reviewedReports       Report[]                   @relation("ReportReviewer")
   moderationActions     ModerationLog[]            @relation("ModerationActor")
+  wallet                Wallet?
+  sentGiftEvents        RoomGiftEvent[]            @relation("GiftSender")
+  receivedGiftEvents    RoomGiftEvent[]            @relation("GiftReceiver")
+  paymentIntents        PaymentIntent[]
+  creatorLedgerEntries  CreatorLedgerEntry[]       @relation("CreatorLedgerUser")
+  premiumSubscriptions  PremiumSubscription[]
+  walletTransactions    WalletTransaction[]
 }
 
 model Profile {
@@ -493,6 +587,11 @@ model Post {
   shareSlug    String?       @unique
   hiddenAt     DateTime?
   hiddenReason String?       @db.VarChar(500)
+  isSponsored  Boolean       @default(false)
+  sponsorName  String?       @db.VarChar(120)
+  sponsorCtaText String?     @db.VarChar(80)
+  sponsorCtaUrl String?      @db.VarChar(500)
+  adPlacementId String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   author       User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
@@ -503,8 +602,10 @@ model Post {
   savedBy      SavedPost[]
   shares       Post[]        @relation("PostShares")
   sharedPost   Post?         @relation("PostShares", fields: [sharedPostId], references: [id], onDelete: SetNull)
+  adPlacement  AdPlacement?  @relation(fields: [adPlacementId], references: [id], onDelete: SetNull)
 
   @@index([authorId, createdAt])
+  @@index([createdAt, isSponsored])
 }
 
 model Status {
@@ -612,8 +713,11 @@ model VoiceRoom {
   updatedAt    DateTime           @updatedAt
   host         User               @relation("VoiceRoomHost", fields: [hostId], references: [id], onDelete: Cascade)
   participants VoiceParticipant[]
+  giftEvents   RoomGiftEvent[]
+  creatorLedgerEntries CreatorLedgerEntry[]
 
   @@index([hostId, createdAt])
+  @@index([status, createdAt])
 }
 
 model VoiceParticipant {
@@ -848,4 +952,181 @@ model CommunityMember {
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([communityId, userId])
+}
+
+model Wallet {
+  id            String              @id @default(cuid())
+  userId         String              @unique
+  balanceCoins   Int                 @default(0)
+  heldCoins      Int                 @default(0)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions   WalletTransaction[]
+  paymentIntents PaymentIntent[]
+}
+
+model WalletTransaction {
+  id               String                  @id @default(cuid())
+  walletId          String
+  userId            String
+  type              WalletTransactionType
+  status            WalletTransactionStatus @default(COMPLETED)
+  amountCoins       Int
+  balanceAfterCoins Int
+  referenceType     String?
+  referenceId       String?
+  idempotencyKey    String?                 @unique
+  metadata          Json?
+  createdAt         DateTime                @default(now())
+  wallet            Wallet                  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sentGiftEvent     RoomGiftEvent?          @relation("GiftSpendTransaction")
+  receivedGiftEvent RoomGiftEvent?          @relation("GiftReceiptTransaction")
+
+  @@index([userId, createdAt])
+  @@index([walletId, createdAt])
+  @@index([referenceType, referenceId])
+}
+
+model PaymentIntent {
+  id                    String               @id @default(cuid())
+  userId                 String
+  walletId               String?
+  provider               PaymentProvider
+  purpose                PaymentIntentPurpose
+  status                 PaymentIntentStatus @default(PENDING)
+  coinsAmount            Int?
+  fiatAmount             Decimal?            @db.Decimal(12, 2)
+  currency               String              @default("USD") @db.VarChar(8)
+  providerReference      String?             @db.VarChar(191)
+  clientReference        String              @unique
+  verificationToken      String?             @db.VarChar(191)
+  verifiedAt             DateTime?
+  failureReason          String?             @db.VarChar(500)
+  metadata               Json?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  completedWalletTransactionId String?
+  user                   User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet                 Wallet?              @relation(fields: [walletId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model GiftCatalogItem {
+  id             String          @id @default(cuid())
+  slug           String          @unique
+  name           String
+  description    String?         @db.VarChar(240)
+  iconKey        String
+  assetUrl       String?         @db.VarChar(500)
+  coinCost       Int
+  accentColor    String?         @db.VarChar(20)
+  isActive       Boolean         @default(true)
+  sortOrder      Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  giftEvents     RoomGiftEvent[]
+
+  @@index([isActive, sortOrder])
+}
+
+model RoomGiftEvent {
+  id                     String              @id @default(cuid())
+  roomId                  String
+  senderId                String
+  receiverId              String
+  giftId                  String
+  quantity                Int                 @default(1)
+  totalCoinCost           Int
+  platformCommissionCoins Int
+  creatorNetCoins         Int
+  message                 String?             @db.VarChar(180)
+  clientRequestId         String              @unique
+  spendTransactionId      String              @unique
+  receiptTransactionId    String              @unique
+  createdAt               DateTime            @default(now())
+  room                    VoiceRoom           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender                  User                @relation("GiftSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver                User                @relation("GiftReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  gift                    GiftCatalogItem     @relation(fields: [giftId], references: [id], onDelete: Restrict)
+  spendTransaction        WalletTransaction   @relation("GiftSpendTransaction", fields: [spendTransactionId], references: [id], onDelete: Restrict)
+  receiptTransaction      WalletTransaction   @relation("GiftReceiptTransaction", fields: [receiptTransactionId], references: [id], onDelete: Restrict)
+  creatorLedgerEntry      CreatorLedgerEntry?
+
+  @@index([roomId, createdAt])
+  @@index([receiverId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model CreatorLedgerEntry {
+  id                     String              @id @default(cuid())
+  userId                 String
+  roomId                 String?
+  giftEventId            String?             @unique
+  sourceType             String
+  grossCoins             Int
+  platformCommissionCoins Int
+  netCoins               Int
+  status                 CreatorLedgerStatus @default(PENDING)
+  availableAt            DateTime?
+  settledAt              DateTime?
+  holdReason             String?             @db.VarChar(500)
+  createdAt              DateTime            @default(now())
+  user                   User                @relation("CreatorLedgerUser", fields: [userId], references: [id], onDelete: Cascade)
+  room                   VoiceRoom?          @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  giftEvent              RoomGiftEvent?      @relation(fields: [giftEventId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, createdAt])
+  @@index([roomId, createdAt])
+}
+
+model PremiumPlan {
+  id               String                     @id @default(cuid())
+  slug             String                     @unique
+  name             String
+  description      String?                    @db.VarChar(280)
+  interval         PremiumPlanInterval
+  priceLabel       String                     @db.VarChar(40)
+  badgeLabel       String?                    @db.VarChar(40)
+  features         Json?
+  isActive         Boolean                    @default(true)
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  subscriptions    PremiumSubscription[]
+}
+
+model PremiumSubscription {
+  id                String                    @id @default(cuid())
+  userId            String
+  planId            String
+  provider          PaymentProvider
+  status            PremiumSubscriptionStatus @default(INACTIVE)
+  startedAt         DateTime?
+  expiresAt         DateTime?
+  canceledAt        DateTime?
+  providerReference String?                   @db.VarChar(191)
+  metadata          Json?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  user              User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan              PremiumPlan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, expiresAt])
+}
+
+model AdPlacement {
+  id            String           @id @default(cuid())
+  key           String           @unique
+  name          String
+  placementType AdPlacementType
+  isActive      Boolean          @default(true)
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  sponsoredPosts Post[]
+
+  @@index([placementType, isActive])
 }

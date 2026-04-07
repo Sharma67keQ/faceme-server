@@ -1,5 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import { prisma } from "../lib/prisma.js";
+import { emitRealtime, emitRealtimeToUser } from "../lib/realtime.js";
 import { moderationService } from "./moderation.service.js";
 import { ApiError } from "../utils/api-error.js";
 
@@ -278,6 +279,7 @@ export const postService = {
       include: postInclude,
     });
 
+    emitRealtime("feed:changed", { reason: "post_created", postId: post.id, authorId: userId });
     return serializePost(post, userId);
   },
 
@@ -314,6 +316,7 @@ export const postService = {
       include: postInclude,
     });
 
+    emitRealtime("feed:changed", { reason: "post_updated", postId: updated.id, authorId: userId });
     return serializePost(updated, userId);
   },
 
@@ -334,6 +337,7 @@ export const postService = {
       where: { id: postId },
     });
 
+    emitRealtime("feed:changed", { reason: "post_deleted", postId, authorId: userId });
     return { deleted: true };
   },
 
@@ -537,8 +541,10 @@ export const postService = {
           entityId: postId,
         },
       });
+      emitRealtimeToUser(post.authorId, "notifications:changed", { reason: "post_liked", entityId: postId });
     }
 
+    emitRealtime("feed:changed", { reason: "post_liked", postId, actorId: userId });
     return like;
   },
 
@@ -602,6 +608,7 @@ export const postService = {
           body,
         },
       });
+      emitRealtimeToUser(targetPost.authorId, "notifications:changed", { reason: "post_commented", entityId: postId });
     }
 
     if (parentCommentId) {
@@ -622,9 +629,11 @@ export const postService = {
             body,
           },
         });
+        emitRealtimeToUser(parentComment.authorId, "notifications:changed", { reason: "comment_replied", entityId: parentCommentId });
       }
     }
 
+    emitRealtime("feed:changed", { reason: "post_commented", postId, commentId: comment.id, actorId: userId });
     return serializeComment({ ...comment, replies: [] }, userId);
   },
 
@@ -701,6 +710,7 @@ export const postService = {
               : `${input.type.toLowerCase()} reaction on your comment`,
         },
       });
+      emitRealtimeToUser(targetComment.authorId, "notifications:changed", { reason: "comment_reacted", entityId: commentId });
     }
 
     const comment = await prisma.postComment.findUniqueOrThrow({
@@ -711,6 +721,7 @@ export const postService = {
       },
     });
 
+    emitRealtime("feed:changed", { reason: "comment_reacted", postId: comment.postId, commentId, actorId: userId });
     return serializeComment({ ...comment, replies: [] }, userId);
   },
 
@@ -741,6 +752,7 @@ export const postService = {
       },
     });
 
+    emitRealtime("feed:changed", { reason: "comment_updated", postId: updated.postId, commentId, actorId: userId });
     return serializeComment({ ...updated, replies: [] }, userId);
   },
 
@@ -761,6 +773,7 @@ export const postService = {
       where: { id: commentId },
     });
 
+    emitRealtime("feed:changed", { reason: "comment_deleted", commentId, actorId: userId });
     return { deleted: true };
   },
 
@@ -844,8 +857,10 @@ export const postService = {
           entityId: post.id,
         },
       });
+      emitRealtimeToUser(post.authorId, "notifications:changed", { reason: "post_shared", entityId: post.id });
     }
 
+    emitRealtime("feed:changed", { reason: "post_shared", postId: post.id, sharedPostId: sharedPost.id, actorId: userId });
     return serializePost(sharedPost, userId);
   },
 

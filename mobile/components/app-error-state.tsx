@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useI18n } from "@/services/i18n";
 import { colors, radius, spacing } from "@/utils/theme";
 
 type AppErrorStateProps = {
@@ -9,23 +10,27 @@ type AppErrorStateProps = {
 };
 
 export const AppErrorState = ({
-  title = "Something went wrong",
-  message = "The app hit an unexpected error while loading this screen.",
-  actionLabel = "Try again",
+  title,
+  message,
+  actionLabel,
   onAction,
-}: AppErrorStateProps) => (
-  <View style={styles.container}>
-    <View style={styles.card}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.body}>{message}</Text>
-      {onAction ? (
-        <Pressable style={styles.button} onPress={onAction}>
-          <Text style={styles.buttonLabel}>{actionLabel}</Text>
-        </Pressable>
-      ) : null}
+}: AppErrorStateProps) => {
+  const { t } = useI18n();
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.card}>
+        <Text style={styles.title}>{title ?? t("appError.title")}</Text>
+        <Text style={styles.body}>{message ?? t("appError.body")}</Text>
+        {onAction ? (
+          <Pressable style={styles.button} onPress={onAction}>
+            <Text style={styles.buttonLabel}>{actionLabel ?? t("appError.retry")}</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   container: {

@@ -7,14 +7,24 @@ let socket: Socket | null = null;
 
 export const chatService = {
   async getConversations() {
-    const { data } = await api.get<ChatListResponse>("/chat/conversations");
-    return data;
+    try {
+      const { data } = await api.get<ChatListResponse>("/chat/conversations");
+      return data;
+    } catch (error) {
+      console.error("Failed to load conversations", error);
+      throw error;
+    }
   },
   async getMessages(conversationId: string) {
-    const { data } = await api.get<MessageListResponse>(
-      `/chat/conversations/${conversationId}/messages`,
-    );
-    return data;
+    try {
+      const { data } = await api.get<MessageListResponse>(
+        `/chat/conversations/${conversationId}/messages`,
+      );
+      return data;
+    } catch (error) {
+      console.error("Failed to load messages", { conversationId, error });
+      throw error;
+    }
   },
   async createDirectConversation(peerId: string) {
     const { data } = await api.post("/chat/conversations/direct", { peerId });
@@ -41,12 +51,37 @@ export const chatService = {
       return socket;
     }
 
-    socket = io(runtimeConfig.socketUrl, {
-      auth: { token },
-      transports: ["websocket"],
-    });
+    try {
+      socket = io(runtimeConfig.socketUrl, {
+        auth: { token },
+        transports: ["websocket"],
+      });
+
+      socket.on("connect_error", (error) => {
+        console.error("Socket connection error", error);
+      });
+
+      socket.on("disconnect", (reason) => {
+        console.error("Socket disconnected", reason);
+      });
+    } catch (error) {
+      console.error("Failed to initialize socket", error);
+      socket = null;
+    }
 
     return socket;
+  },
+  on(event: string, listener: (...args: any[]) => void) {
+    socket?.on(event, listener);
+  },
+  off(event: string, listener: (...args: any[]) => void) {
+    socket?.off(event, listener);
+  },
+  joinVoiceRoom(roomId: string) {
+    socket?.emit("voice-room:join", roomId);
+  },
+  leaveVoiceRoom(roomId: string) {
+    socket?.emit("voice-room:leave", roomId);
   },
   onPresenceUpdate(listener: (payload: { userId: string; status: "ONLINE" | "OFFLINE" | "AWAY" }) => void) {
     socket?.on("presence:update", listener);

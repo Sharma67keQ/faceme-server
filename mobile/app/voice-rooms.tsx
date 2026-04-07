@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Screen } from "@/components/ui/screen";
+import { useI18n } from "@/services/i18n";
 import { voiceRoomService } from "@/services/voice-rooms";
 import { VoiceRoom } from "@/types/domain";
 import { colors, radius, spacing } from "@/utils/theme";
@@ -20,6 +21,7 @@ const roomThemes: Array<{ key: VoiceRoom["theme"]; label: string; colors: [strin
 
 export default function VoiceRoomsScreen() {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [description, setDescription] = useState("");
@@ -53,17 +55,15 @@ export default function VoiceRoomsScreen() {
   return (
     <Screen scroll>
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>Live audio</Text>
-        <Text style={styles.title}>Voice rooms</Text>
-        <Text style={styles.subtitle}>
-          Join live conversations, or host a moderated room with owners, admins, and members.
-        </Text>
+        <Text style={styles.eyebrow}>{t("room.liveAudio")}</Text>
+        <Text style={styles.title}>{t("rooms.title")}</Text>
+        <Text style={styles.subtitle}>{t("rooms.subtitle")}</Text>
       </View>
 
       <View style={styles.composeCard}>
-        <Input label="Room title" value={title} onChangeText={setTitle} />
-        <Input label="Topic" value={topic} onChangeText={setTopic} />
-        <Input label="Description" value={description} onChangeText={setDescription} multiline />
+        <Input label={t("rooms.roomTitle")} value={title} onChangeText={setTitle} />
+        <Input label={t("rooms.topic")} value={topic} onChangeText={setTopic} />
+        <Input label={t("rooms.description")} value={description} onChangeText={setDescription} multiline />
         <View style={styles.themeRow}>
           {roomThemes.map((item) => (
             <Pressable key={item.key} onPress={() => setTheme(item.key)} style={styles.themeOption}>
@@ -89,14 +89,14 @@ export default function VoiceRoomsScreen() {
           ))}
         </View>
         <Button
-          label={createMutation.isPending ? "Creating..." : "Create room"}
+          label={createMutation.isPending ? t("rooms.creatingRoom") : t("rooms.createRoom")}
           onPress={() => createMutation.mutate()}
           disabled={!title.trim() || createMutation.isPending}
         />
       </View>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Live rooms</Text>
+        <Text style={styles.sectionTitle}>{t("rooms.liveRooms")}</Text>
         <Text style={styles.sectionMeta}>{rooms.length}</Text>
       </View>
 
@@ -143,8 +143,8 @@ export default function VoiceRoomsScreen() {
         ))}
         {!rooms.length ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No rooms live yet</Text>
-            <Text style={styles.emptyBody}>Create the first room and bring people into an actual conversation space.</Text>
+            <Text style={styles.emptyTitle}>{t("rooms.noRooms")}</Text>
+            <Text style={styles.emptyBody}>{t("rooms.noRoomsBody")}</Text>
           </View>
         ) : null}
       </ScrollView>

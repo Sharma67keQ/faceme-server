@@ -11,12 +11,16 @@ import { useEffect, useMemo, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ConnectionState, Participant } from "livekit-client";
+import { ScreenState } from "@/components/screen-state";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Screen } from "@/components/ui/screen";
+import { useI18n } from "@/services/i18n";
 import { ensureLiveKitGlobals } from "@/services/livekit";
+import { monetizationService } from "@/services/monetization";
 import { voiceRoomService } from "@/services/voice-rooms";
+import { chatService } from "@/services/chat";
 import { useAuthStore } from "@/store/auth-store";
 import { VoiceRoom } from "@/types/domain";
 import { colors, radius, spacing } from "@/utils/theme";
@@ -90,8 +94,10 @@ const serializeLiveParticipants = (participants: Participant[]): LiveParticipant
 
 export default function VoiceRoomDetailScreen() {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
+  const resolvedRoomId = typeof roomId === "string" ? roomId : "";
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftTopic, setDraftTopic] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
@@ -99,16 +105,58 @@ export default function VoiceRoomDetailScreen() {
   const [draftTheme, setDraftTheme] = useState<VoiceRoom["theme"]>("SUNSET");
   const [audioSession, setAudioSession] = useState<AudioSessionPayload | null>(null);
   const [voiceTransportError, setVoiceTransportError] = useState<string | null>(null);
+  const [screenError, setScreenError] = useState<string | null>(null);
+  const [giftMessage, setGiftMessage] = useState("");
+  const { t } = useI18n();
 
   useEffect(() => {
     ensureLiveKitGlobals();
   }, []);
 
-  const { data: room, refetch } = useQuery({
-    queryKey: ["voice-room", roomId],
-    queryFn: () => voiceRoomService.getById(roomId) as Promise<VoiceRoom>,
-    refetchInterval: 5000,
+  const { data: room, refetch, isLoading, isError } = useQuery({
+    queryKey: ["voice-room", resolvedRoomId],
+    queryFn: () => voiceRoomService.getById(resolvedRoomId) as Promise<VoiceRoom>,
+    enabled: Boolean(resolvedRoomId),
   });
+  const { data: wallet } = useQuery({
+    queryKey: ["wallet"],
+    queryFn: monetizationService.getWallet,
+  });
+  const { data: giftCatalog = [] } = useQuery({
+    queryKey: ["gift-catalog"],
+    queryFn: monetizationService.getGiftCatalog,
+  });
+  const { data: giftSnapshot } = useQuery({
+    queryKey: ["voice-room-gifts", resolvedRoomId],
+    queryFn: () => monetizationService.getRoomGiftSnapshot(resolvedRoomId),
+    enabled: Boolean(resolvedRoomId),
+  });
+
+  useEffect(() => {
+    if (!resolvedRoomId || !accessToken) {
+      return;
+    }
+
+    const socket = chatService.connect(accessToken);
+    if (!socket) {
+      console.error("Voice room socket unavailable", { roomId: resolvedRoomId });
+      return;
+    }
+    const handleRoomChanged = () => {
+      void queryClient.invalidateQueries({ queryKey: ["voice-room", resolvedRoomId] });
+      void queryClient.invalidateQueries({ queryKey: ["voice-rooms"] });
+      void queryClient.invalidateQueries({ queryKey: ["voice-room-gifts", resolvedRoomId] });
+      void queryClient.invalidateQueries({ queryKey: ["wallet"] });
+    };
+
+    chatService.joinVoiceRoom(resolvedRoomId);
+    socket.on("voice-room:changed", handleRoomChanged);
+
+    return () => {
+      socket.off("voice-room:changed", handleRoomChanged);
+      chatService.leaveVoiceRoom(resolvedRoomId);
+    };
+  }, [accessToken, queryClient, resolvedRoomId]);
 
   useEffect(() => {
     if (!room) {
@@ -131,7 +179,7 @@ export default function VoiceRoomDetailScreen() {
 
   const invalidate = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["voice-room", roomId] }),
+      queryClient.invalidateQueries({ queryKey: ["voice-room", resolvedRoomId] }),
       queryClient.invalidateQueries({ queryKey: ["voice-rooms"] }),
     ]);
     await refetch();
@@ -145,7 +193,7 @@ export default function VoiceRoomDetailScreen() {
 
   const updateMutation = useMutation({
     mutationFn: () =>
-      voiceRoomService.update(roomId, {
+      voiceRoomService.update(resolvedRoomId, {
         title: draftTitle.trim(),
         topic: draftTopic.trim() || null,
         description: draftDescription.trim() || null,
@@ -156,12 +204,14 @@ export default function VoiceRoomDetailScreen() {
   });
 
   const audioTokenMutation = useMutation({
-    mutationFn: () => voiceRoomService.issueAudioToken(roomId),
+    mutationFn: () => voiceRoomService.issueAudioToken(resolvedRoomId),
     onSuccess: (payload) => {
+      setScreenError(null);
       setVoiceTransportError(null);
       setAudioSession(payload);
     },
     onError: (error: Error) => {
+      console.error("Failed to issue audio token", error);
       setVoiceTransportError(error.message);
     },
   });
@@ -169,13 +219,17 @@ export default function VoiceRoomDetailScreen() {
   const joinLeaveMutation = useMutation({
     mutationFn: async () => {
       if (room?.canJoin) {
-        await voiceRoomService.join(roomId);
+        await voiceRoomService.join(resolvedRoomId);
         return { joined: true };
       }
 
       await disconnectAudio();
-      await voiceRoomService.leave(roomId);
+      await voiceRoomService.leave(resolvedRoomId);
       return { joined: false };
+    },
+    onError: (error) => {
+      console.error("Failed to join or leave room", error);
+      setScreenError("Could not update room participation.");
     },
     onSuccess: async ({ joined }) => {
       await invalidate();
@@ -188,50 +242,120 @@ export default function VoiceRoomDetailScreen() {
   const endMutation = useMutation({
     mutationFn: async () => {
       await disconnectAudio();
-      return voiceRoomService.endRoom(roomId);
+      return voiceRoomService.endRoom(resolvedRoomId);
+    },
+    onError: (error) => {
+      console.error("Failed to end room", error);
+      setScreenError("Could not close this room.");
     },
     onSuccess: invalidate,
   });
+  const giftMutation = useMutation({
+    mutationFn: (giftId: string) =>
+      monetizationService.sendRoomGift(resolvedRoomId, {
+        giftId,
+        clientRequestId: `${resolvedRoomId}-${Date.now()}-${giftId}`,
+        message: giftMessage.trim() || undefined,
+      }),
+    onError: (error) => {
+      console.error("Failed to send room gift", error);
+      setScreenError("Gift could not be sent.");
+    },
+    onSuccess: async () => {
+      setScreenError(null);
+      setGiftMessage("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["wallet"] }),
+        queryClient.invalidateQueries({ queryKey: ["voice-room-gifts", resolvedRoomId] }),
+      ]);
+    },
+  });
 
-  if (!room) {
+  if (!resolvedRoomId) {
     return (
       <Screen>
-        <Text style={styles.feedback}>Loading room...</Text>
+        <ScreenState
+          variant="error"
+          title="Voice room unavailable"
+          message="The selected room route is invalid."
+        />
       </Screen>
     );
   }
 
-  const currentViewer = room.participants.find((participant) => participant.user.id === currentUserId) ?? null;
+  if (isLoading && !room) {
+    return (
+      <Screen>
+        <ScreenState
+          variant="loading"
+          title={t("common.loading")}
+          message="Voice room details are loading."
+        />
+      </Screen>
+    );
+  }
+
+  if (isError && !room) {
+    return (
+      <Screen>
+        <ScreenState
+          variant="error"
+          title="Could not load room"
+          message="The room details are temporarily unavailable."
+          actionLabel="Retry"
+          onAction={() => void refetch()}
+        />
+      </Screen>
+    );
+  }
+
+  if (!room) {
+    return (
+      <Screen>
+        <ScreenState
+          variant="loading"
+          title={t("common.loading")}
+          message="Faceme is waiting for room data."
+        />
+      </Screen>
+    );
+  }
+
+  const activeRoom = room;
+  const currentViewer = activeRoom.participants.find((participant) => participant.user.id === currentUserId) ?? null;
 
   return (
     <Screen scroll>
-      <LinearGradient colors={roomThemes[room.theme].colors} style={styles.hero}>
+      <LinearGradient colors={roomThemes[activeRoom.theme].colors} style={styles.hero}>
         <View style={styles.heroTopRow}>
           <View style={styles.heroCopy}>
-            <Text style={styles.title}>{room.title}</Text>
-            <Text style={styles.meta}>{`${roomThemes[room.theme].label} | ${room.privacy} | ${room.status}`}</Text>
+            <Text style={styles.title}>{activeRoom.title}</Text>
+            <Text style={styles.meta}>{`${roomThemes[activeRoom.theme].label} | ${activeRoom.privacy} | ${activeRoom.status}`}</Text>
           </View>
           <View style={styles.liveBadge}>
-            <Text style={styles.liveBadgeText}>{room.participantsCount ?? room.participants.length} live</Text>
+            <Text style={styles.liveBadgeText}>{activeRoom.participantsCount ?? activeRoom.participants.length} live</Text>
           </View>
         </View>
-        <Text style={styles.description}>{room.description ?? room.topic ?? "Join the live conversation."}</Text>
+        <Text style={styles.description}>{activeRoom.description ?? activeRoom.topic ?? "Join the live conversation."}</Text>
         <View style={styles.hostRow}>
-          <Avatar name={room.owner?.firstName ?? room.host.firstName ?? room.host.username} size={34} />
+          <Avatar name={activeRoom.owner?.firstName ?? activeRoom.host.firstName ?? activeRoom.host.username} size={34} />
           <View>
             <Text style={styles.hostLabel}>Hosted by</Text>
-            <Text style={styles.hostName}>{room.owner?.firstName ?? room.host.firstName ?? room.host.username}</Text>
+            <Text style={styles.hostName}>{activeRoom.owner?.firstName ?? activeRoom.host.firstName ?? activeRoom.host.username}</Text>
           </View>
         </View>
       </LinearGradient>
 
       <View style={styles.controls}>
+        <View style={styles.walletChip}>
+          <Text style={styles.walletChipLabel}>{wallet?.balanceCoins ?? 0} coins</Text>
+        </View>
         <Button
-          label={joinLeaveMutation.isPending ? "Working..." : room.canJoin ? "Join room" : "Leave room"}
+          label={joinLeaveMutation.isPending ? "Working..." : activeRoom.canJoin ? "Join room" : "Leave room"}
           onPress={() => joinLeaveMutation.mutate()}
-          variant={room.canJoin ? "primary" : "secondary"}
+          variant={activeRoom.canJoin ? "primary" : "secondary"}
         />
-        {!room.canJoin ? (
+        {!activeRoom.canJoin ? (
           <Button
             label={audioTokenMutation.isPending ? "Connecting..." : audioSession ? "Reconnect audio" : "Connect audio"}
             onPress={() => audioTokenMutation.mutate()}
@@ -239,6 +363,7 @@ export default function VoiceRoomDetailScreen() {
           />
         ) : null}
         {voiceTransportError ? <Text style={styles.audioError}>{voiceTransportError}</Text> : null}
+        {screenError ? <Text style={styles.audioError}>{screenError}</Text> : null}
       </View>
 
       {audioSession ? (
@@ -259,9 +384,13 @@ export default function VoiceRoomDetailScreen() {
           }}
         >
           <VoiceRoomLivePanel
-            room={room}
+            giftCatalog={giftCatalog}
+            giftMessage={giftMessage}
+            giftMutation={giftMutation}
+            giftSnapshot={giftSnapshot}
+            room={activeRoom}
             currentViewer={currentViewer}
-            roomId={roomId}
+            roomId={resolvedRoomId}
             draftDescription={draftDescription}
             draftPrivacy={draftPrivacy}
             draftTheme={draftTheme}
@@ -274,11 +403,13 @@ export default function VoiceRoomDetailScreen() {
             onChangeTheme={setDraftTheme}
             onChangeTitle={setDraftTitle}
             onChangeTopic={setDraftTopic}
+            onGiftMessageChange={setGiftMessage}
+            t={t}
             updateAction={{ isPending: updateMutation.isPending, mutate: () => updateMutation.mutate() }}
           />
         </LiveKitRoom>
       ) : (
-        <VoiceRoomRoster room={room} />
+        <VoiceRoomRoster room={activeRoom} />
       )}
     </Screen>
   );
@@ -286,6 +417,10 @@ export default function VoiceRoomDetailScreen() {
 
 const VoiceRoomLivePanel = ({
   room,
+  giftCatalog,
+  giftMessage,
+  giftMutation,
+  giftSnapshot,
   currentViewer,
   roomId,
   draftDescription,
@@ -300,9 +435,30 @@ const VoiceRoomLivePanel = ({
   onChangeTheme,
   onChangeTitle,
   onChangeTopic,
+  onGiftMessageChange,
+  t,
   updateAction,
 }: {
   room: VoiceRoom;
+  giftCatalog: Array<{ id: string; name: string; coinCost: number; accentColor?: string | null }>;
+  giftMessage: string;
+  giftMutation: { isPending: boolean; mutate: (giftId: string) => void };
+  giftSnapshot?: {
+    recentEvents: Array<{
+      id: string;
+      gift: { name: string };
+      sender: { firstName: string; username: string };
+      totalCoinCost: number;
+    }>;
+    topSupporters: Array<{
+      user: { firstName?: string; username: string } | null;
+      totalCoins: number;
+    }>;
+    roomEarnings: {
+      grossCoins: number;
+      creatorNetCoins: number;
+    };
+  };
   currentViewer: VoiceRoom["participants"][number] | null;
   roomId: string;
   draftDescription: string;
@@ -317,6 +473,8 @@ const VoiceRoomLivePanel = ({
   onChangeTheme: (value: VoiceRoom["theme"]) => void;
   onChangeTitle: (value: string) => void;
   onChangeTopic: (value: string) => void;
+  onGiftMessageChange: (value: string) => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
   updateAction: VoidAction;
 }) => {
   const participants = useParticipants();
@@ -376,21 +534,21 @@ const VoiceRoomLivePanel = ({
       <View style={styles.transportCard}>
         <View style={styles.transportHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Live audio</Text>
+            <Text style={styles.sectionTitle}>{t("room.liveAudio")}</Text>
             <Text style={styles.transportSubtle}>
-              {connectionState === ConnectionState.Connected ? "Connected to LiveKit" : "Connecting to LiveKit"}
+              {connectionState === ConnectionState.Connected ? t("room.connected") : t("room.connecting")}
             </Text>
           </View>
           <View style={[styles.connectionPill, connectionState === ConnectionState.Connected ? styles.connectionPillActive : null]}>
             <Text style={[styles.connectionPillLabel, connectionState === ConnectionState.Connected ? styles.connectionPillLabelActive : null]}>
-              {connectionState === ConnectionState.Connected ? "Live" : "Syncing"}
+              {connectionState === ConnectionState.Connected ? t("room.live") : t("room.syncing")}
             </Text>
           </View>
         </View>
 
         <View style={styles.transportActions}>
           <Button
-            label={stateMutation.isPending ? "Updating..." : isMicrophoneEnabled ? "Mute mic" : "Unmute mic"}
+            label={stateMutation.isPending ? t("common.loading") : isMicrophoneEnabled ? t("room.muteMic") : t("room.unmuteMic")}
             onPress={() => void toggleSelfMicrophone()}
             disabled={stateMutation.isPending || currentViewer?.isMutedByModerator}
           />
@@ -408,9 +566,50 @@ const VoiceRoomLivePanel = ({
         room={{ ...room, participants: mergedParticipants }}
       />
 
+      <View style={styles.giftPanel}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{t("room.supportTitle")}</Text>
+          <Text style={styles.sectionMeta}>{t("room.liveGifts")}</Text>
+        </View>
+        <Input label={t("room.giftNote")} value={giftMessage} onChangeText={onGiftMessageChange} />
+        <View style={styles.giftGrid}>
+          {giftCatalog.map((gift) => (
+            <Pressable
+              key={gift.id}
+              style={[styles.giftCard, gift.accentColor ? { borderColor: gift.accentColor } : null]}
+              onPress={() => giftMutation.mutate(gift.id)}
+              disabled={giftMutation.isPending}
+            >
+              <Text style={styles.giftCardTitle}>{gift.name}</Text>
+              <Text style={styles.giftCardMeta}>{gift.coinCost} coins</Text>
+            </Pressable>
+          ))}
+        </View>
+        {giftSnapshot?.topSupporters?.length ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t("room.topSupporters")}</Text>
+            {giftSnapshot.topSupporters.map((supporter, index) => (
+              <Text key={`${supporter.user?.username ?? "unknown"}-${index}`} style={styles.memberMeta}>
+                {index + 1}. {supporter.user?.firstName ?? supporter.user?.username ?? "Unknown"} · {supporter.totalCoins} coins
+              </Text>
+            ))}
+          </View>
+        ) : null}
+        {giftSnapshot?.recentEvents?.length ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t("room.activity")}</Text>
+            {giftSnapshot.recentEvents.slice(0, 5).map((event) => (
+              <Text key={event.id} style={styles.memberMeta}>
+                {event.sender.firstName ?? event.sender.username} sent {event.gift.name} · {event.totalCoinCost} coins
+              </Text>
+            ))}
+          </View>
+        ) : null}
+      </View>
+
       {room.canEdit ? (
         <View style={styles.editor}>
-          <Text style={styles.sectionTitle}>Room settings</Text>
+          <Text style={styles.sectionTitle}>{t("room.roomSettings")}</Text>
           <Input label="Title" value={draftTitle} onChangeText={onChangeTitle} />
           <Input label="Topic" value={draftTopic} onChangeText={onChangeTopic} />
           <Input label="Description" value={draftDescription} onChangeText={onChangeDescription} multiline />
@@ -438,9 +637,9 @@ const VoiceRoomLivePanel = ({
               </Pressable>
             ))}
           </View>
-          <Button label={updateAction.isPending ? "Saving..." : "Save room"} onPress={updateAction.mutate} />
+          <Button label={updateAction.isPending ? t("common.loading") : t("room.saveRoom")} onPress={updateAction.mutate} />
           <Button
-            label={endAction.isPending ? "Ending..." : "Close room"}
+            label={endAction.isPending ? t("common.loading") : t("room.closeRoom")}
             onPress={endAction.mutate}
             variant="secondary"
           />
@@ -548,6 +747,16 @@ const styles = StyleSheet.create({
   hostLabel: { color: "#FFF2EA", fontSize: 12, fontWeight: "700", textTransform: "uppercase" },
   hostName: { color: "#FFFFFF", fontWeight: "800" },
   controls: { gap: spacing.sm },
+  walletChip: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  walletChipLabel: { color: colors.primaryDark, fontWeight: "800" },
   audioError: { color: colors.danger, lineHeight: 20 },
   transportCard: {
     backgroundColor: colors.surfaceRaised,
@@ -574,6 +783,31 @@ const styles = StyleSheet.create({
   connectionPillLabel: { color: colors.textMuted, fontWeight: "800" },
   connectionPillLabelActive: { color: colors.accent },
   transportActions: { gap: spacing.sm },
+  section: { gap: spacing.xs },
+  giftPanel: {
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  giftGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  giftCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.xxs,
+    minWidth: 120,
+    padding: spacing.sm,
+  },
+  giftCardTitle: { color: colors.text, fontWeight: "800" },
+  giftCardMeta: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   sectionTitle: { color: colors.text, fontSize: 18, fontWeight: "800" },
   sectionMeta: { color: colors.textSoft, fontWeight: "700" },

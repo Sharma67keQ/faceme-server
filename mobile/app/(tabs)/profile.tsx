@@ -7,12 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Screen } from "@/components/ui/screen";
 import { PostCard } from "@/components/post-card";
+import { monetizationService } from "@/services/monetization";
 import { userService } from "@/services/users";
 import { useAuthStore } from "@/store/auth-store";
+import { useI18n } from "@/services/i18n";
 import { colors, radius, spacing } from "@/utils/theme";
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuthStore();
+  const { t } = useI18n();
   const stats = [
     { label: "Posts", value: user?._count?.posts ?? 0, type: "posts" },
     { label: "Followers", value: user?._count?.followers ?? 0, type: "followers" },
@@ -23,6 +26,11 @@ export default function ProfileScreen() {
     queryKey: ["my-profile-posts", user?.username],
     queryFn: () => (user?.username ? userService.getUserPostsByUsername(user.username) : Promise.resolve([])),
     enabled: Boolean(user?.username),
+  });
+  const { data: wallet } = useQuery({
+    queryKey: ["wallet"],
+    queryFn: monetizationService.getWallet,
+    enabled: Boolean(user),
   });
 
   const handleSignOut = async () => {
@@ -52,10 +60,10 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.memberBadge}>
                 <Ionicons name="sparkles-outline" color={colors.gold} size={14} />
-                <Text style={styles.memberBadgeLabel}>Faceme identity</Text>
+                <Text style={styles.memberBadgeLabel}>{t("common.appName")}</Text>
               </View>
             </View>
-            <Text style={styles.name}>{user?.firstName ?? "Faceme User"}</Text>
+            <Text style={styles.name}>{user?.firstName ?? t("common.profile")}</Text>
             <Text style={styles.username}>@{user?.username ?? "username"}</Text>
             <Text style={styles.meta}>{user?.email ?? "No email loaded"}</Text>
           </View>
@@ -64,16 +72,20 @@ export default function ProfileScreen() {
         <View style={styles.quickActions}>
           <Pressable style={styles.quickAction} onPress={() => router.push("/profile/edit")}>
             <Ionicons name="create-outline" color={colors.primaryDark} size={16} />
-            <Text style={styles.quickActionLabel}>Edit profile</Text>
+            <Text style={styles.quickActionLabel}>{t("profile.editProfile")}</Text>
           </Pressable>
           <Pressable style={styles.quickAction} onPress={() => router.push("/saved")}>
             <Ionicons name="bookmark-outline" color={colors.primaryDark} size={16} />
-            <Text style={styles.quickActionLabel}>Saved</Text>
+            <Text style={styles.quickActionLabel}>{t("profile.saved")}</Text>
+          </Pressable>
+          <Pressable style={styles.quickAction} onPress={() => router.push("/settings" as never)}>
+            <Ionicons name="settings-outline" color={colors.primaryDark} size={16} />
+            <Text style={styles.quickActionLabel}>{t("profile.settings")}</Text>
           </Pressable>
           {hasModerationAccess ? (
             <Pressable style={styles.quickAction} onPress={() => router.push("/moderation")}>
               <Ionicons name="shield-checkmark-outline" color={colors.primaryDark} size={16} />
-              <Text style={styles.quickActionLabel}>Moderation</Text>
+              <Text style={styles.quickActionLabel}>{t("profile.moderation")}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -97,31 +109,38 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.details}>
-        <Text style={styles.sectionTitle}>Identity</Text>
-        <Text style={styles.detailText}>Location: {user?.location ?? "Not set"}</Text>
-        <Text style={styles.detailText}>Website: {user?.website ?? "Not set"}</Text>
-        <Text style={styles.detailText}>Account: {user?.accountType ?? "PERSONAL"}</Text>
-        <Text style={styles.detailText}>Privacy: {user?.profileVisibility ?? "PUBLIC"}</Text>
+        <Text style={styles.sectionTitle}>{t("profile.identity")}</Text>
+        <Text style={styles.detailText}>{t("profile.location")}: {user?.location ?? t("profile.notSet")}</Text>
+        <Text style={styles.detailText}>{t("profile.website")}: {user?.website ?? t("profile.notSet")}</Text>
+        <Text style={styles.detailText}>{t("profile.account")}: {user?.accountType ?? "PERSONAL"}</Text>
+        <Text style={styles.detailText}>{t("profile.privacy")}: {user?.profileVisibility ?? "PUBLIC"}</Text>
+        <Text style={styles.detailText}>Coins: {wallet?.balanceCoins ?? 0}</Text>
+        {wallet?.transactions?.slice(0, 3).map((transaction) => (
+          <Text key={transaction.id} style={styles.detailText}>
+            {transaction.type}: {transaction.amountCoins > 0 ? "+" : ""}{transaction.amountCoins}
+          </Text>
+        ))}
       </View>
 
       <View style={styles.actionStack}>
-        <Button label="Edit profile" variant="secondary" onPress={() => router.push("/profile/edit")} />
-        <Button label="Saved posts" variant="secondary" onPress={() => router.push("/saved")} />
+        <Button label={t("profile.editProfile")} variant="secondary" onPress={() => router.push("/profile/edit")} />
+        <Button label={t("profile.saved")} variant="secondary" onPress={() => router.push("/saved")} />
+        <Button label={t("profile.settings")} variant="secondary" onPress={() => router.push("/settings" as never)} />
         {hasModerationAccess ? (
-          <Button label="Moderation" variant="secondary" onPress={() => router.push("/moderation")} />
+          <Button label={t("profile.moderation")} variant="secondary" onPress={() => router.push("/moderation")} />
         ) : null}
-        <Button label="Sign out" onPress={handleSignOut} />
+        <Button label={t("profile.signOut")} onPress={handleSignOut} />
       </View>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Your posts</Text>
+        <Text style={styles.sectionTitle}>{t("profile.yourPosts")}</Text>
         <Text style={styles.sectionMeta}>{posts.length}</Text>
       </View>
       <ScrollView contentContainerStyle={styles.postList}>
         {posts.map((post: any) => (
           <PostCard key={post.id} post={post} />
         ))}
-        {!posts.length ? <Text style={styles.empty}>You have not posted yet.</Text> : null}
+        {!posts.length ? <Text style={styles.empty}>{t("profile.noPosts")}</Text> : null}
       </ScrollView>
     </Screen>
   );

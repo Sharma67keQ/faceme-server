@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ChatListItem } from "@/components/chat-list-item";
+import { ScreenState } from "@/components/screen-state";
 import { Avatar } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Screen } from "@/components/ui/screen";
@@ -18,11 +19,12 @@ export default function ChatsScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [groupTitle, setGroupTitle] = useState("");
   const trimmedSearchQuery = searchQuery.trim();
-  const { data } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["conversations"],
     queryFn: chatService.getConversations,
   });
-  const unreadTotal = (data ?? []).reduce((sum, conversation) => sum + (conversation.unreadCount ?? 0), 0);
+  const conversations = data ?? [];
+  const unreadTotal = conversations.reduce((sum, conversation) => sum + (conversation.unreadCount ?? 0), 0);
   const { data: users = [], isFetching: isSearching } = useQuery({
     queryKey: ["user-search", trimmedSearchQuery],
     queryFn: () => userService.searchUsers(trimmedSearchQuery),
@@ -30,6 +32,9 @@ export default function ChatsScreen() {
   });
   const createDirectConversationMutation = useMutation({
     mutationFn: (peerId: string) => chatService.createDirectConversation(peerId),
+    onError: (error) => {
+      console.error("Failed to create direct conversation", error);
+    },
     onSuccess: async (conversation) => {
       await queryClient.invalidateQueries({ queryKey: ["conversations"] });
       setSearchQuery("");
@@ -40,6 +45,9 @@ export default function ChatsScreen() {
   const createGroupMutation = useMutation({
     mutationFn: (participantIds: string[]) =>
       chatService.createGroupConversation({ title: groupTitle.trim(), participantIds }),
+    onError: (error) => {
+      console.error("Failed to create group conversation", error);
+    },
     onSuccess: async (conversation) => {
       await queryClient.invalidateQueries({ queryKey: ["conversations"] });
       setGroupTitle("");
@@ -47,6 +55,32 @@ export default function ChatsScreen() {
       router.push(`/chat/${conversation.id}`);
     },
   });
+
+  if (isLoading && !conversations.length) {
+    return (
+      <Screen>
+        <ScreenState
+          variant="loading"
+          title="Loading chats"
+          message="Your conversations are being prepared."
+        />
+      </Screen>
+    );
+  }
+
+  if (isError && !conversations.length) {
+    return (
+      <Screen>
+        <ScreenState
+          variant="error"
+          title="Could not load chats"
+          message="Messaging is unavailable right now, but the app is still running."
+          actionLabel="Retry"
+          onAction={() => void refetch()}
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -122,11 +156,11 @@ export default function ChatsScreen() {
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Recent conversations</Text>
         <Text style={styles.sectionMeta}>
-          {data?.length ?? 0} active {"\u00B7"} {unreadTotal} unread
+          {conversations.length} active {"\u00B7"} {unreadTotal} unread
         </Text>
       </View>
       <ScrollView contentContainerStyle={styles.list}>
-        {data?.map((conversation) => (
+        {conversations.map((conversation) => (
           <ChatListItem
             key={conversation.id}
             conversation={conversation}
@@ -134,7 +168,7 @@ export default function ChatsScreen() {
             onPress={() => router.push(`/chat/${conversation.id}`)}
           />
         ))}
-        {!data?.length ? (
+        {!conversations.length ? (
           <Text style={styles.empty}>
             Search for someone above to start your first direct conversation.
           </Text>

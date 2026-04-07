@@ -4,6 +4,7 @@ import type { ParticipantInfo, TrackInfo, TrackSource } from "@livekit/protocol"
 import { env } from "../lib/env.js";
 import { isLiveKitConfigured, liveKitRoomClient } from "../lib/livekit.js";
 import { prisma } from "../lib/prisma.js";
+import { emitRealtime, emitRealtimeToRoom, emitRealtimeToUser } from "../lib/realtime.js";
 import { ApiError } from "../utils/api-error.js";
 
 const userSelect = {
@@ -87,6 +88,11 @@ const deleteLiveKitRoom = async (roomId: string) => {
   } catch {
     // The room may already be gone in LiveKit. That should not block ending it in Faceme.
   }
+};
+
+const emitRoomRealtime = (roomId: string, payload: Record<string, unknown>) => {
+  emitRealtime("voice-rooms:changed", payload);
+  emitRealtimeToRoom(`voice-room:${roomId}`, "voice-room:changed", payload);
 };
 
 const listLiveParticipants = async (roomId: string) => {
@@ -350,6 +356,7 @@ export const voiceRoomService = {
     });
 
     await syncLiveKitRoom(room);
+    emitRoomRealtime(room.id, { reason: "room_created", roomId: room.id, actorId: userId });
     return serializeRoom(room, userId);
   },
 
@@ -383,6 +390,7 @@ export const voiceRoomService = {
     });
 
     await syncLiveKitRoom(room);
+    emitRoomRealtime(room.id, { reason: "room_updated", roomId: room.id, actorId: userId });
     return serializeRoom(room, userId);
   },
 
@@ -429,8 +437,10 @@ export const voiceRoomService = {
           entityId: roomId,
         },
       });
+      emitRealtimeToUser(room.hostId, "notifications:changed", { reason: "voice_room_joined", entityId: roomId });
     }
 
+    emitRoomRealtime(roomId, { reason: "participant_joined", roomId, actorId: userId });
     return this.getById(userId, roomId);
   },
 
@@ -453,6 +463,7 @@ export const voiceRoomService = {
         },
       });
       await deleteLiveKitRoom(roomId);
+      emitRoomRealtime(roomId, { reason: "room_ended", roomId, actorId: userId });
 
       return { left: true, roomEnded: true };
     }
@@ -466,6 +477,7 @@ export const voiceRoomService = {
       },
     });
 
+    emitRoomRealtime(roomId, { reason: "participant_left", roomId, actorId: userId });
     return { left: true };
   },
 
@@ -498,6 +510,7 @@ export const voiceRoomService = {
     });
 
     await syncLiveParticipantPermissions(roomId, updated);
+    emitRoomRealtime(roomId, { reason: "participant_state_changed", roomId, actorId: userId });
     return updated;
   },
 
@@ -536,6 +549,7 @@ export const voiceRoomService = {
     });
 
     await syncLiveParticipantPermissions(roomId, updated);
+    emitRoomRealtime(roomId, { reason: "participant_role_changed", roomId, actorId: userId, targetUserId: participantUserId });
     return updated;
   },
 
@@ -574,6 +588,7 @@ export const voiceRoomService = {
     });
 
     await syncLiveParticipantPermissions(roomId, updated);
+    emitRoomRealtime(roomId, { reason: muted ? "participant_muted" : "participant_unmuted", roomId, actorId: userId, targetUserId: participantUserId });
     return updated;
   },
 
@@ -603,6 +618,7 @@ export const voiceRoomService = {
     });
     await removeLiveParticipant(roomId, participantUserId);
 
+    emitRoomRealtime(roomId, { reason: "participant_removed", roomId, actorId: userId, targetUserId: participantUserId });
     return { removed: true };
   },
 
@@ -624,6 +640,7 @@ export const voiceRoomService = {
     });
 
     await deleteLiveKitRoom(roomId);
+    emitRoomRealtime(roomId, { reason: "room_ended", roomId, actorId: userId });
     return serializeRoom(room, userId);
   },
 

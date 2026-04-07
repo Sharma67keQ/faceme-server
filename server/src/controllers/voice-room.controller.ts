@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { z } from "zod";
+import { monetizationService } from "../services/monetization.service.js";
 import { voiceRoomService } from "../services/voice-room.service.js";
 
 const roomPrivacyEnum = z.enum(["PUBLIC", "FOLLOWERS", "FRIENDS", "INVITE_ONLY"]);
@@ -22,6 +23,14 @@ const updateRoomSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   privacy: roomPrivacyEnum.optional(),
   theme: roomThemeEnum.optional(),
+});
+
+const sendGiftSchema = z.object({
+  giftId: z.string().min(1),
+  quantity: z.number().int().min(1).max(100).optional(),
+  receiverId: z.string().min(1).optional(),
+  clientRequestId: z.string().min(1),
+  message: z.string().max(180).optional(),
 });
 
 export const voiceRoomController = {
@@ -101,5 +110,18 @@ export const voiceRoomController = {
     const roomId = z.string().min(1).parse(req.params.roomId);
     const token = await voiceRoomService.issueAudioToken(req.user!.id, roomId);
     return res.status(StatusCodes.OK).json(token);
+  },
+
+  async giftSnapshot(req: Request, res: Response) {
+    const roomId = z.string().min(1).parse(req.params.roomId);
+    const snapshot = await monetizationService.getRoomGiftSnapshot(roomId);
+    return res.status(StatusCodes.OK).json(snapshot);
+  },
+
+  async sendGift(req: Request, res: Response) {
+    const roomId = z.string().min(1).parse(req.params.roomId);
+    const payload = sendGiftSchema.parse(req.body);
+    const result = await monetizationService.sendRoomGift(req.user!.id, roomId, payload);
+    return res.status(StatusCodes.CREATED).json(result);
   },
 };

@@ -10,6 +10,7 @@ export type User = {
   location?: string | null;
   website?: string | null;
   accountType?: "PERSONAL" | "CREATOR" | "BUSINESS";
+  preferredLanguage?: "SO" | "EN" | "AR";
   role?: "USER" | "MODERATOR" | "ADMIN";
   isOnboardingComplete?: boolean;
   isPrivateAccount?: boolean;
@@ -317,6 +318,81 @@ export type VoiceRoom = {
     canUnmute?: boolean;
     user: User;
   }>;
+};
+
+export type GiftCatalogItem = {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  iconKey: string;
+  assetUrl?: string | null;
+  coinCost: number;
+  accentColor?: string | null;
+};
+
+export type WalletTransaction = {
+  id: string;
+  type: "TOP_UP" | "GIFT_SPEND" | "GIFT_RECEIPT" | "ADJUSTMENT" | "REFUND" | "HOLD" | "RELEASE";
+  status: "PENDING" | "COMPLETED" | "FAILED" | "CANCELED";
+  amountCoins: number;
+  balanceAfterCoins: number;
+  referenceType?: string | null;
+  referenceId?: string | null;
+  createdAt: string;
+};
+
+export type WalletSummary = {
+  balanceCoins: number;
+  heldCoins: number;
+  transactions: WalletTransaction[];
+  premium: {
+    status: string;
+    expiresAt?: string | null;
+    badgeVisible: boolean;
+    plan?: {
+      id: string;
+      slug: string;
+      name: string;
+    } | null;
+  };
+  premiumPlans: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    description?: string | null;
+    interval: "MONTHLY" | "YEARLY";
+    priceLabel: string;
+    badgeLabel?: string | null;
+  }>;
+};
+
+export type RoomGiftEvent = {
+  id: string;
+  roomId: string;
+  quantity: number;
+  totalCoinCost: number;
+  platformCommissionCoins: number;
+  creatorNetCoins: number;
+  message?: string | null;
+  createdAt: string;
+  gift: GiftCatalogItem;
+  sender: User & { isPremium?: boolean };
+  receiver: User & { isPremium?: boolean };
+};
+
+export type RoomGiftSnapshot = {
+  recentEvents: RoomGiftEvent[];
+  topSupporters: Array<{
+    user: (User & { isPremium?: boolean }) | null;
+    totalCoins: number;
+    giftsSent: number;
+  }>;
+  roomEarnings: {
+    grossCoins: number;
+    platformCommissionCoins: number;
+    creatorNetCoins: number;
+  };
 };
 
 export type Message = {

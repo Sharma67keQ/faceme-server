@@ -1,38 +1,10 @@
-import Constants from "expo-constants";
-
-const extractExpoHost = () => {
-  const expoConfigHost = Constants.expoConfig?.hostUri;
-  const manifest2Host = (Constants as { manifest2?: { extra?: { expoClient?: { hostUri?: string } } } })
-    .manifest2?.extra?.expoClient?.hostUri;
-  const legacyManifestHost = (Constants as { manifest?: { debuggerHost?: string } }).manifest?.debuggerHost;
-  const hostUri = expoConfigHost ?? manifest2Host ?? legacyManifestHost;
-
-  if (!hostUri) {
-    return null;
-  }
-
-  return hostUri.split(":")[0] ?? null;
-};
-
 const warnInvalidConfig = (label: string, value: string) => {
   console.warn(`[runtime-config] Invalid ${label}: "${value}". Falling back to a safe default.`);
 };
 
-const resolveOrigin = (value: string, fallbackOrigin: string) => {
+const toOrigin = (value: string, fallbackOrigin: string) => {
   try {
     const url = new URL(value);
-
-    if (url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
-      return url.origin;
-    }
-
-    const expoHost = extractExpoHost();
-
-    if (!expoHost) {
-      return url.origin;
-    }
-
-    url.hostname = expoHost;
     return url.origin;
   } catch {
     warnInvalidConfig("origin", value);
@@ -47,10 +19,11 @@ const developmentApiBase = "http://localhost:4000/api";
 const developmentSocketBase = "http://localhost:4000";
 const developmentLiveKitBase = "";
 const appEnv = process.env.EXPO_PUBLIC_APP_ENV ?? "development";
+const isProductionLike = appEnv !== "development";
 
-const defaultApiBase = appEnv === "production" ? productionApiBase : developmentApiBase;
-const defaultSocketBase = appEnv === "production" ? productionSocketBase : developmentSocketBase;
-const defaultLiveKitBase = appEnv === "production" ? productionLiveKitBase : developmentLiveKitBase;
+const defaultApiBase = isProductionLike ? productionApiBase : developmentApiBase;
+const defaultSocketBase = isProductionLike ? productionSocketBase : developmentSocketBase;
+const defaultLiveKitBase = isProductionLike ? productionLiveKitBase : developmentLiveKitBase;
 
 const apiSource = process.env.EXPO_PUBLIC_API_URL ?? defaultApiBase;
 const socketSource = process.env.EXPO_PUBLIC_SOCKET_URL ?? defaultSocketBase;
@@ -70,12 +43,34 @@ const resolveConfiguredUrl = (value: string, fallback: string, label: string) =>
   }
 };
 
+const assertHostedUrl = (value: string, label: string, fallback: string) => {
+  const resolved = resolveConfiguredUrl(value, fallback, label);
+
+  if (!isProductionLike) {
+    return resolved;
+  }
+
+  try {
+    const url = new URL(resolved);
+
+    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+      warnInvalidConfig(label, resolved);
+      return fallback;
+    }
+
+    return resolved;
+  } catch {
+    warnInvalidConfig(label, resolved);
+    return fallback;
+  }
+};
+
 const resolveApiBaseUrl = () => {
-  const configuredApiSource = resolveConfiguredUrl(apiSource, defaultApiBase, "EXPO_PUBLIC_API_URL");
+  const configuredApiSource = assertHostedUrl(apiSource, "EXPO_PUBLIC_API_URL", defaultApiBase);
 
   try {
     const url = new URL(configuredApiSource);
-    const origin = resolveOrigin(configuredApiSource, defaultSocketBase);
+    const origin = toOrigin(configuredApiSource, defaultSocketBase);
     return `${origin}${url.pathname}`;
   } catch {
     warnInvalidConfig("EXPO_PUBLIC_API_URL", configuredApiSource);
@@ -86,9 +81,11 @@ const resolveApiBaseUrl = () => {
 export const runtimeConfig = {
   appEnv,
   apiBaseUrl: resolveApiBaseUrl(),
-  socketUrl: resolveOrigin(
-    resolveConfiguredUrl(socketSource, defaultSocketBase, "EXPO_PUBLIC_SOCKET_URL"),
+  socketUrl: toOrigin(
+    assertHostedUrl(socketSource, "EXPO_PUBLIC_SOCKET_URL", defaultSocketBase),
     defaultSocketBase,
   ),
-  liveKitUrl: liveKitSource ? resolveConfiguredUrl(liveKitSource, defaultLiveKitBase, "EXPO_PUBLIC_LIVEKIT_URL") : null,
+  liveKitUrl: liveKitSource
+    ? assertHostedUrl(liveKitSource, "EXPO_PUBLIC_LIVEKIT_URL", defaultLiveKitBase)
+    : null,
 };

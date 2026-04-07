@@ -12,12 +12,13 @@
       }
     },
     "preview": {
+      "autoIncrement": true,
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_APP_ENV": "preview",
         "EXPO_PUBLIC_API_URL": "https://faceme-server.onrender.com/api",
         "EXPO_PUBLIC_SOCKET_URL": "https://faceme-server.onrender.com",
         "EXPO_PUBLIC_LIVEKIT_URL": "wss://faceme-room-a7k9-9jt0ys2r.livekit.cloud"
@@ -25,6 +26,9 @@
     },
     "production": {
       "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
         "EXPO_PUBLIC_APP_ENV": "production",
         "EXPO_PUBLIC_API_URL": "https://faceme-server.onrender.com/api",

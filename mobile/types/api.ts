@@ -13,12 +13,15 @@ import {
   Page,
   Post,
   Reel,
+  GiftCatalogItem,
   Relationship,
+  RoomGiftSnapshot,
   SocialGroup,
   Status,
   Story,
   User,
   VoiceRoom,
+  WalletSummary,
 } from "./domain";
 
 export type AuthResponse = {
@@ -46,6 +49,9 @@ export type VoiceRoomResponse = VoiceRoom[];
 export type ModerationReportResponse = ModerationReport[];
 export type ModerationLogResponse = ModerationLog[];
 export type ModerationOverviewResponse = ModerationOverview;
+export type WalletSummaryResponse = WalletSummary;
+export type GiftCatalogResponse = GiftCatalogItem[];
+export type RoomGiftSnapshotResponse = RoomGiftSnapshot;
 
 export type MediaUploadResponse = {
   publicId: string;

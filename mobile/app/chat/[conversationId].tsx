@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MediaAttachmentPreview } from "@/components/media-attachment-preview";
+import { ScreenState } from "@/components/screen-state";
 import { Screen } from "@/components/ui/screen";
 import { chatService } from "@/services/chat";
 import { mediaService } from "@/services/media";
@@ -13,6 +14,7 @@ import { colors, radius, spacing } from "@/utils/theme";
 
 export default function ConversationScreen() {
   const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
+  const resolvedConversationId = typeof conversationId === "string" ? conversationId : "";
   const accessToken = useAuthStore((state) => state.accessToken);
   const currentUserId = useAuthStore((state) => state.user?.id);
   const setMessages = useChatStore((state) => state.setMessages);
@@ -24,40 +26,50 @@ export default function ConversationScreen() {
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const [messageStatuses, setMessageStatuses] = useState<Record<string, "SENT" | "DELIVERED" | "SEEN">>({});
   const [isUploading, setIsUploading] = useState(false);
+  const [composerError, setComposerError] = useState<string | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["messages", conversationId],
-    queryFn: () => chatService.getMessages(conversationId),
+    queryKey: ["messages", resolvedConversationId],
+    queryFn: () => chatService.getMessages(resolvedConversationId),
+    enabled: Boolean(resolvedConversationId),
   });
 
   useEffect(() => {
-    setActiveConversation(conversationId);
+    if (!resolvedConversationId) {
+      return;
+    }
+
+    setActiveConversation(resolvedConversationId);
 
     return () => {
       setActiveConversation(null);
     };
-  }, [conversationId, setActiveConversation]);
+  }, [resolvedConversationId, setActiveConversation]);
 
   useEffect(() => {
-    if (conversationId && data) {
-      setMessages(conversationId, data);
+    if (resolvedConversationId && data) {
+      setMessages(resolvedConversationId, data);
     }
-  }, [conversationId, data, setMessages]);
+  }, [resolvedConversationId, data, setMessages]);
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!accessToken || !resolvedConversationId) {
       return;
     }
 
     const socket = chatService.connect(accessToken);
+    if (!socket) {
+      console.error("Conversation socket unavailable", { conversationId: resolvedConversationId });
+      return;
+    }
     const handleNewMessage = (message: any) => {
-      if (message.conversationId === conversationId) {
-        appendMessage(conversationId, message);
+      if (message.conversationId === resolvedConversationId) {
+        appendMessage(resolvedConversationId, message);
       }
     };
     const handleTypingUpdate = (payload: { conversationId: string; userId: string; isTyping: boolean }) => {
-      if (payload.conversationId !== conversationId || payload.userId === currentUserId) {
+      if (payload.conversationId !== resolvedConversationId || payload.userId === currentUserId) {
         return;
       }
 
@@ -69,7 +81,7 @@ export default function ConversationScreen() {
       userId: string;
       status: "SENT" | "DELIVERED" | "SEEN";
     }) => {
-      if (payload.conversationId !== conversationId || payload.userId === currentUserId) {
+      if (payload.conversationId !== resolvedConversationId || payload.userId === currentUserId) {
         return;
       }
 
@@ -79,7 +91,7 @@ export default function ConversationScreen() {
       }));
     };
 
-    socket.emit("conversation:join", conversationId);
+    socket.emit("conversation:join", resolvedConversationId);
     socket.on("message:new", handleNewMessage);
     socket.on("typing:update", handleTypingUpdate);
     socket.on("message:status", handleMessageStatus);
@@ -88,18 +100,21 @@ export default function ConversationScreen() {
       socket.off("message:new", handleNewMessage);
       socket.off("typing:update", handleTypingUpdate);
       socket.off("message:status", handleMessageStatus);
-      socket.emit("typing:stop", { conversationId });
+      socket.emit("typing:stop", { conversationId: resolvedConversationId });
     };
-  }, [accessToken, appendMessage, conversationId, currentUserId]);
+  }, [accessToken, appendMessage, currentUserId, resolvedConversationId]);
 
-  const messages = useChatStore((state) => state.messagesByConversation[conversationId] ?? []);
+  const messages = useChatStore((state) => state.messagesByConversation[resolvedConversationId] ?? []);
 
   useEffect(() => {
-    if (!accessToken || !messages.length) {
+    if (!accessToken || !resolvedConversationId || !messages.length) {
       return;
     }
 
     const socket = chatService.connect(accessToken);
+    if (!socket) {
+      return;
+    }
     const lastIncomingMessage = [...messages]
       .reverse()
       .find((message) => message.senderId !== currentUserId);
@@ -109,10 +124,10 @@ export default function ConversationScreen() {
     }
 
     socket.emit("message:seen", {
-      conversationId,
+      conversationId: resolvedConversationId,
       messageId: lastIncomingMessage.id,
     });
-  }, [accessToken, conversationId, currentUserId, messages]);
+  }, [accessToken, currentUserId, messages, resolvedConversationId]);
 
   useEffect(() => () => {
     if (typingTimeoutRef.current) {
@@ -122,15 +137,19 @@ export default function ConversationScreen() {
 
   const handleTextChange = (value: string) => {
     setText(value);
+    setComposerError(null);
 
-    if (!accessToken) {
+    if (!accessToken || !resolvedConversationId) {
       return;
     }
 
     const socket = chatService.connect(accessToken);
+    if (!socket) {
+      return;
+    }
 
     if (!value.trim()) {
-      socket.emit("typing:stop", { conversationId });
+      socket.emit("typing:stop", { conversationId: resolvedConversationId });
 
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -139,14 +158,14 @@ export default function ConversationScreen() {
       return;
     }
 
-    socket.emit("typing:start", { conversationId });
+    socket.emit("typing:start", { conversationId: resolvedConversationId });
 
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
     typingTimeoutRef.current = setTimeout(() => {
-      socket.emit("typing:stop", { conversationId });
+      socket.emit("typing:stop", { conversationId: resolvedConversationId });
     }, 1200);
   };
 
@@ -157,35 +176,53 @@ export default function ConversationScreen() {
       return;
     }
 
+    if (!resolvedConversationId) {
+      setComposerError("This conversation link is invalid.");
+      return;
+    }
+
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    if (accessToken) {
-      const socket = chatService.connect(accessToken);
-      socket.emit("typing:stop", { conversationId });
-      socket.emit("message:send", {
-        conversationId,
-        text: trimmedText || undefined,
-        mediaUrl: mediaAttachment?.remoteUrl,
-        type: mediaAttachment?.remoteUrl ? messageType : "TEXT",
-      });
-    } else {
-      await chatService.sendMessage(conversationId, {
-        text: trimmedText || undefined,
-        mediaUrl: mediaAttachment?.remoteUrl,
-        type: mediaAttachment?.remoteUrl ? messageType : "TEXT",
-      });
-    }
+    try {
+      setComposerError(null);
 
-    setText("");
-    setMediaAttachment(null);
-    setMessageType("TEXT");
+      if (accessToken) {
+        const socket = chatService.connect(accessToken);
+
+        if (!socket) {
+          throw new Error("Socket connection unavailable.");
+        }
+
+        socket.emit("typing:stop", { conversationId: resolvedConversationId });
+        socket.emit("message:send", {
+          conversationId: resolvedConversationId,
+          text: trimmedText || undefined,
+          mediaUrl: mediaAttachment?.remoteUrl,
+          type: mediaAttachment?.remoteUrl ? messageType : "TEXT",
+        });
+      } else {
+        await chatService.sendMessage(resolvedConversationId, {
+          text: trimmedText || undefined,
+          mediaUrl: mediaAttachment?.remoteUrl,
+          type: mediaAttachment?.remoteUrl ? messageType : "TEXT",
+        });
+      }
+
+      setText("");
+      setMediaAttachment(null);
+      setMessageType("TEXT");
+    } catch (error) {
+      console.error("Failed to send message", error);
+      setComposerError("Message could not be sent. Try again.");
+    }
   };
 
   const handlePickAttachment = async (type: "IMAGE" | "VIDEO") => {
     try {
       setIsUploading(true);
+      setComposerError(null);
       const asset = await mediaService.pickFromLibrary(type === "VIDEO" ? "video" : "image");
 
       if (!asset) {
@@ -195,10 +232,51 @@ export default function ConversationScreen() {
       const uploaded = await mediaService.uploadAsset(asset, type === "VIDEO" ? "video" : "image");
       setMediaAttachment({ localUri: asset.uri, remoteUrl: uploaded.secureUrl });
       setMessageType(type);
+    } catch (error) {
+      console.error("Failed to attach media", error);
+      setComposerError("Attachment upload failed. Try another file.");
     } finally {
       setIsUploading(false);
     }
   };
+
+  if (!resolvedConversationId) {
+    return (
+      <Screen>
+        <ScreenState
+          variant="error"
+          title="Conversation unavailable"
+          message="The selected chat route is invalid."
+        />
+      </Screen>
+    );
+  }
+
+  if (isLoading && !messages.length) {
+    return (
+      <Screen>
+        <ScreenState
+          variant="loading"
+          title="Loading conversation"
+          message="Messages are being fetched."
+        />
+      </Screen>
+    );
+  }
+
+  if (isError && !messages.length) {
+    return (
+      <Screen>
+        <ScreenState
+          variant="error"
+          title="Could not load messages"
+          message="This chat is temporarily unavailable."
+          actionLabel="Retry"
+          onAction={() => void refetch()}
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -210,7 +288,7 @@ export default function ConversationScreen() {
         </Text>
       ) : null}
       <ScrollView contentContainerStyle={styles.messages}>
-        {!isLoading && !isError && !messages.length ? (
+        {!messages.length ? (
           <Text style={styles.feedback}>No messages yet. Start the conversation.</Text>
         ) : null}
         {messages.map((message) => (
@@ -301,6 +379,7 @@ export default function ConversationScreen() {
           <Text style={styles.sendLabel}>Send</Text>
         </Pressable>
       </View>
+      {composerError ? <Text style={styles.composerError}>{composerError}</Text> : null}
     </Screen>
   );
 }
@@ -415,6 +494,10 @@ const styles = StyleSheet.create({
   },
   feedback: {
     color: colors.textMuted,
+  },
+  composerError: {
+    color: colors.danger,
+    lineHeight: 20,
   },
   typing: {
     color: colors.textMuted,
