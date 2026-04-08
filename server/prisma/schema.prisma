@@ -32,6 +32,12 @@ enum MediaType {
   FILE
 }
 
+enum ContentVisibility {
+  PUBLIC
+  FOLLOWERS
+  FRIENDS
+}
+
 enum ConversationType {
   DIRECT
   GROUP
@@ -242,7 +248,7 @@ model Post {
   mediaUrl    String?
   mediaType   MediaType?
   sharedPostId String?
-  visibility  String        @default("PUBLIC")
+  visibility  ContentVisibility @default(PUBLIC)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   author      User          @relation(fields: [authorId], references: [id], onDelete: Cascade)

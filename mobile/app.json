@@ -4,13 +4,43 @@
     "slug": "faceme",
     "scheme": "faceme",
     "version": "1.0.0",
+    "icon": "./assets/icon-square.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#121316"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4c7c5390-bb3f-4062-933f-641345c2144e"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon-square.png",
+        "backgroundColor": "#1F1F22"
+      },
+      "splash": {
+        "image": "./assets/logo.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#121316"
+      },
+      "package": "com.kadarabdy.faceme"
+    },
+    "ios": {
+      "splash": {
+        "image": "./assets/logo.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#121316"
+      }
     }
   }
 }

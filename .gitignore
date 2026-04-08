@@ -13,4 +13,5 @@ coverage/
 server/generated/
 mobile/.expo/
 mobile/web-build/
+mobile/.codex-validate/
 *.tsbuildinfo
