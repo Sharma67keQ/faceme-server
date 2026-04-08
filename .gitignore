@@ -1,0 +1,16 @@
+node_modules/
+.npm-cache/
+dist/
+.expo/
+.expo-shared/
+coverage/
+*.log
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+server/generated/
+mobile/.expo/
+mobile/web-build/
+*.tsbuildinfo

@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "FaceMe",
+    "slug": "faceme",
+    "scheme": "faceme",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
